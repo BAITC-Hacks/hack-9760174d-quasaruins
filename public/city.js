@@ -1,12 +1,12 @@
 /** Geographic presentation only. All policy effects and scores come from the shared evaluator. */
-import { createCityDetails } from './city-details.js?v=20260923-r09';
+import { createCityDetails } from './city-details.js?v=20260923-r13';
 import { makeTrack, sampleTrack } from './city-motion.js';
 import { createProjectEffects } from './city-project-effects.js?v=20260923-r14';
 import { BASELINE } from '../shared/simulation.js';
 // One shared horizontal scale keeps every geographic layer aligned. Model sizes
 // and parcel clearances remain world-space dimensions, rather than doubling.
 const MAP_SCALE = 2;
-const COLORS = { land: 0xf7f9f5, side: 0xffffff, outside: 0xffffff, water: 0x379ebd, road: 0x7e8c91, building: 0xf3f1e9, roof: 0x526976, glass: 0x295570, green: 0x24784f, mint: 0xedf7ee, transport: 0x187e94, social: 0x8a73b8, safety: 0xb37a25, services: 0x436c8d };
+const COLORS = { land: 0xffffff, side: 0xffffff, outside: 0xffffff, water: 0x379ebd, road: 0x7e8c91, building: 0xf3f1e9, roof: 0x526976, glass: 0x295570, green: 0x24784f, mint: 0xedf7ee, transport: 0x187e94, social: 0x8a73b8, safety: 0xb37a25, services: 0x436c8d };
 const FACADES = [0xf4f3ed,0xe9e5d9,0xd9d0c2,0xf8f9f5,0xbc785c,0x657a86];
 const SERVICE_TYPES = [
   {id:'school',name:'School',indicator:'S1',color:0x8a73b8},
@@ -62,6 +62,8 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
   const materials = new Map(), geometries = new Map(), projectSites = new Map(), serviceSites = new Map(), baselineServices = [], neighborhoodServices = [], architecture = [];
   let serviceSignature = '';
   let interactionLocked = false;
+  const roadCells=new Map();
+  const clearOfRoad=(point,radius)=>(roadCells.get(`${Math.floor(point[0])}:${Math.floor(point[1])}`)??[]).every(([a,b])=>segmentDistanceSquared(point,a,b)>radius*radius);
   let projectHighlight = null, highlightRings = [];
   const geometry = (id, factory) => { if (!geometries.has(id)) geometries.set(id, factory()); return geometries.get(id); };
   const material = (color, opacity = 1) => {
@@ -115,6 +117,14 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
     waterPolygons = geography.water.features.flatMap((feature) => polygonCoordinates(feature.geometry).map((rings) => usablePolygon(rings.map((ring) => ring.map(project)))).filter(Boolean));
     waterAreas = waterPolygons.map((rings) => ({ rings, minX: Math.min(...rings[0].map(p=>p[0])), maxX: Math.max(...rings[0].map(p=>p[0])), minY: Math.min(...rings[0].map(p=>p[1])), maxY: Math.max(...rings[0].map(p=>p[1])) }));
     roads = geography.roads.features.flatMap((feature) => lineCoordinates(feature.geometry).map((line) => line.map(project))).filter((line) => line.length > 1);
+    // Spatial road index keeps dense building footprints off the source corridors.
+    roadCells.clear();
+    for(const line of roads)for(let i=1;i<line.length;i++){
+      const a=line[i-1],b=line[i];
+      for(let x=Math.floor(Math.min(a[0],b[0])-.4);x<=Math.floor(Math.max(a[0],b[0])+.4);x++)for(let y=Math.floor(Math.min(a[1],b[1])-.4);y<=Math.floor(Math.max(a[1],b[1])+.4);y++){
+        const key=`${x}:${y}`;if(!roadCells.has(key))roadCells.set(key,[]);roadCells.get(key).push([a,b]);
+      }
+    }
     const roadSamples = roads.flatMap((line) => line.filter((_, i) => i % Math.max(1, Math.floor(line.length / 8)) === 0));
     const sampleStride = Math.max(1, Math.ceil(roadSamples.length / 4000));
     for (const district of districtRecords) {
@@ -138,7 +148,7 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
       for (const rings of district.polygons) {
         const geometry = new THREE.ExtrudeGeometry(shapeFor(rings), { depth: .13, bevelEnabled: false }); geometry.rotateX(-Math.PI / 2);
         const top = new THREE.MeshBasicMaterial({ color: district.modeled ? COLORS.land : COLORS.outside, toneMapped:false });
-        const mesh = new THREE.Mesh(geometry, [top, material(COLORS.side)]); mesh.receiveShadow = true; mesh.userData.districtId = district.id; scene.add(mesh); district.meshes.push(mesh);
+        const mesh = new THREE.Mesh(geometry, [top, new THREE.MeshBasicMaterial({color:COLORS.side,toneMapped:false})]); mesh.receiveShadow = true; mesh.userData.districtId = district.id; scene.add(mesh); district.meshes.push(mesh);
         const shadow=new THREE.Mesh(geometry,new THREE.ShadowMaterial({color:0x536068,opacity:.14,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1}));shadow.position.y=.001;shadow.receiveShadow=true;scene.add(shadow);
         for (const ring of rings) district.outlines.push(lines(scene, ring.map(([x, y]) => new THREE.Vector3(x, .145, -y)), 0xc3cdbb, .8, true));
       }
@@ -236,11 +246,11 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
       if(!candidates.length)continue;
       // Plain, small blocks packed densely around road samples: simple massing with a thin roof cap, no windows.
       const clusters=Array.from({length:32},()=>candidates[Math.floor(random()*candidates.length)]);
-      for(let i=0;i<1300&&district.buildings.length<(district.modeled?360:220);i++){
+      for(let i=0;i<2300&&district.buildings.length<(district.modeled?360:220);i++){
         const cluster=i%clusters.length,base=clusters[cluster],slot=Math.floor(i/clusters.length);
         const point=[base[0]+(slot%6-2.5)*.4+(random()-.5)*.08,base[1]+(Math.floor(slot/6)-2.5)*.4+(random()-.5)*.08];
         const width=.15+random()*.13,depth=.14+random()*.14;
-        if(!buildableAt(point,district,Math.max(width,depth)/2+.02)||reserved(point)||district.buildings.some(p=>Math.hypot(p[0]-point[0],p[1]-point[1])<.33))continue;
+        if(!clearOfRoad(point,Math.hypot(width,depth)/2+.055)||!buildableAt(point,district,Math.max(width,depth)/2+.02)||reserved(point)||district.buildings.some(p=>Math.hypot(p[0]-point[0],p[1]-point[1])<.33))continue;
         const landmarkDistance=landmarks.length?Math.min(...landmarks.map(anchor=>Math.hypot(point[0]-anchor.position[0],point[1]+anchor.position[2]))):99;
         const tower=cluster%7===0&&slot<3&&landmarkDistance>3;
         const height=landmarkDistance<2.5?.14+random()*.14:tower?.75+random()*.7:.2+random()*.36;
@@ -509,7 +519,7 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
     if(!reactionsHost||props.paused||reducedMotion||reactions.length>24)return;
     const category=props.measureCategories?.[measureId]??({M1:'transport',M2:'transport',M3:'transport',M4:'ecology',M5:'ecology',M6:'ecology',M7:'social',M8:'social',M9:'social',M10:'safety',M11:'safety',M12:'services',M13:'services',M14:'services'})[measureId];
     const tint=PROJECT_TINTS[category]??'#eef4ee',anchor=group.position.clone();anchor.y=.9;
-    const icons=[PROJECT_ICONS[measureId]??'✨','✨','✨'];
+    const icons=[PROJECT_ICONS[measureId]??'✨',measureId==='M11'?'🚶':'🙂','✨'];
     icons.forEach((icon,i)=>{
       const element=document.createElement('div');element.className='city-burst';element.setAttribute('aria-hidden','true');element.textContent=icon;
       element.style.cssText=`position:absolute;transform:translate(-50%,-100%);pointer-events:none;line-height:1;border-radius:999px;${i===0?`font-size:22px;padding:5px 7px;background:${tint}e6;border:1px solid #ffffff;box-shadow:0 3px 12px #2b583118`:'font-size:12px;opacity:.9'}`;
@@ -526,8 +536,8 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
       const active = district.id === props.districtId;
       const hovered = district.id === hoveredDistrictId || Boolean(projectHighlight && (projectHighlight.districtId===null || projectHighlight.districtId===district.id) && district.modeled);
       district.label?.classList.toggle('active', active);
-      for (const outline of district.outlines) { outline.material.color.set(hovered ? 0x24734e : active ? 0x78a38a : 0xc7d4cd); outline.material.opacity = active||hovered ? 1 : .8; }
-      for (const mesh of district.meshes) mesh.material[0].color.set(hovered ? 0xe2efe4 : active ? 0xf0f6ed : district.modeled ? COLORS.land : COLORS.outside);
+      for (const outline of district.outlines) { outline.material.color.set(hovered ? 0x24734e : active ? 0x78a38a : 0xc7d4cd); outline.material.opacity = hovered ? .72 : 0; }
+      for (const mesh of district.meshes) mesh.material[0].color.set(hovered ? 0xeaf4ed : COLORS.land);
     }
     if (!ready3d && geography) drawFallback();
   }
@@ -581,6 +591,9 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
     const top=width<761?112:92,bottom=width<761?(height<690?350:382):342;
     // Frame the subject in the clear city area, above the physical card deck.
     camera.setViewOffset(width,height,0,(bottom-top)/2,width,height);
+    const wasFitted=fitZoom!==null&&Math.abs(camera.zoom-fitZoom)<fitZoom*.04;
+    const fit=fittedView();fitZoom=fit.zoom;controls.minZoom=fitZoom*.98;
+    if(wasFitted)moveCamera(fit.target,fit.zoom,true);else{camera.zoom=Math.max(camera.zoom,controls.minZoom);camera.updateProjectionMatrix();}
     renderer.setSize(width,height,false); placeLabels();
   }
   function moveCamera(target, zoom, immediate = false) {
@@ -589,8 +602,7 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
     if (immediate || props.paused || reducedMotion) { controls.target.copy(target); camera.position.copy(target.clone().add(offset)); camera.zoom=zoom;camera.updateProjectionMatrix();controls.update();focusTween=null;return; }
     focusTween={start:performance.now(),fromTarget:controls.target.clone(),toTarget:target.clone(),fromPosition:camera.position.clone(),toPosition:target.clone().add(offset),fromZoom:camera.zoom,toZoom:zoom};
   }
-  function resetView(immediate = false) {
-    focusedProject=null;if(!home||!controls)return;
+  function fittedView() {
     const width=Math.max(1,canvasHost.clientWidth),height=Math.max(1,canvasHost.clientHeight),aspect=width/height;
     const top=width<761?112:92,bottom=width<761?(height<690?350:382):342;
     const half=Math.max(home.planHeight*.60,home.planWidth/aspect*.57);
@@ -601,7 +613,11 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
     const right=new THREE.Vector3(1,0,0).applyQuaternion(preview.quaternion),up=new THREE.Vector3(0,1,0).applyQuaternion(preview.quaternion);up.y=0;
     const target=home.center.clone().addScaledVector(right,middle.x*half*aspect).addScaledVector(up,middle.y*half/up.lengthSq());
     const zoom=Math.max(.2,Math.min((height-top-bottom)/height*2/size.y,(width-56)/width*2/size.x)*.94);
-    fitZoom=zoom;if(controls)controls.minZoom=zoom*.98;
+    return {target,zoom};
+  }
+  function resetView(immediate = false) {
+    focusedProject=null;if(!home||!controls)return;
+    const {target,zoom}=fittedView();fitZoom=zoom;controls.minZoom=zoom*.98;
     moveCamera(target,zoom,immediate);
   }
   function focusDistrict(id) {
@@ -701,7 +717,7 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
       });
       renderer.domElement.addEventListener('pointerleave',()=>{pointerStart=null;setHoveredDistrict(null);});
       renderer.domElement.addEventListener('webglcontextlost',event=>{event.preventDefault();ready3d=false;cancelAnimationFrame(frame);drawFallback();});
-      resizeObserver=new ResizeObserver(resize);resizeObserver.observe(canvasHost);resize();updateSelection();updateUpgrades();
+      resizeObserver=new ResizeObserver(resize);resizeObserver.observe(canvasHost);resize();updateSelection();updateUpgrades();projectEffects?.update(props);
       if(cityDetails.landmarkAnchors.length)focusLandmark('bayterek');else focusDistrict(props.districtId);
       frame=requestAnimationFrame(tick);
     } catch(error) { ready3d=false;console.warn('Using district fallback:',error.stack ?? error.message);drawFallback(); }
