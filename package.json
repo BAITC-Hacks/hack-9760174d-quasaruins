@@ -1,0 +1,9 @@
+{
+  "name": "akim-lab",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Akim Lab: an explainable city budget simulator for HackAlem Track 12",
+  "engines": { "node": ">=22" },
+  "scripts": { "start": "node server/main.mjs", "dev": "node --watch server/main.mjs", "test": "node --test" }
+}
