@@ -26,7 +26,6 @@ const LANDMARK_SIZE = {
   'abu-dhabi-plaza': { minSize: 0.46, height: 2.6 },
   'national-museum': { minSize: 0.58, height: 0.9 },
   'mangilik-el-arch': { minSize: 0.42, height: 0.62 },
-  'generic': { minSize: 0.3, height: 0.9 },
 };
 
 function polygonsOf(geometry) {
@@ -140,7 +139,7 @@ export function createCityDetails({ THREE, geography, project, groundY = 0.16, m
   };
   const minaret = (parent, x, z, H, cap = colors.gold) => {
     place(shared.octa, colors.white, [x, H * 0.42, z], [0.024, H * 0.84, 0.024], parent);
-    ringAt(parent, 0.034, H * 0.62, colors.white, 1.2);
+    for (const f of [0.62, 0.8]) ringAt(parent, 0.034, H * f, colors.white, 1.2).position.set(x, H * f, z);
     place(shared.cone, cap, [x, H * 0.92, z], [0.028, H * 0.16, 0.028], parent);
   };
   const lineSet = (parent, points, mat) => {
@@ -258,7 +257,7 @@ export function createCityDetails({ THREE, geography, project, groundY = 0.16, m
       }
       return { top: H + 0.03 };
     },
-        'grand-mosque'(parent, size, H) {
+    'grand-mosque'(parent, size, H) {
       const w = size * 0.6, block = H * 0.24;
       place(shared.box, colors.stone, [0, 0.015, 0], [size, 0.03, size * 0.9], parent);
       place(shared.box, colors.white, [0, 0.03 + block / 2, 0], [w, block, w], parent);
@@ -351,18 +350,13 @@ export function createCityDetails({ THREE, geography, project, groundY = 0.16, m
       place(shared.box, colors.gold, [0, H - 0.01, 0], [size * 0.3, 0.03, size * 0.1], parent);
       return { top: H + 0.03 };
     },
-    'generic'(parent, size, H) {
-      place(shared.box, colors.stone, [0, 0.02, 0], [size, 0.04, size], parent);
-      place(shared.octa, colors.white, [0, 0.04 + H * 0.45, 0], [size * 0.18, H * 0.9, size * 0.18], parent);
-      place(shared.sphere, colors.gold, [0, H - 0.04, 0], [0.05, 0.05, 0.05], parent);
-      return { top: H + 0.03 };
-    },
   };
 
   const zones = [], landmarkAnchors = [];
   for (const feature of geography?.landmarks?.features ?? []) {
-    const props = feature.properties ?? {}, model = builders[props.model] ? props.model : 'generic', builder = builders[model];
-    if (feature.geometry?.type !== 'Point' || !Array.isArray(feature.geometry.coordinates)) continue;
+    // Unknown model IDs are skipped (contract): no invented stand-in, no anchor, no reservation.
+    const props = feature.properties ?? {}, model = props.model, builder = Object.hasOwn(builders, model) ? builders[model] : null;
+    if (!builder || feature.geometry?.type !== 'Point' || !Array.isArray(feature.geometry.coordinates)) continue;
     const [east, north] = project(feature.geometry.coordinates);
     const footprint = polygonsOf(props.footprint).map((rings) => rings.map((ring) => ring.map(project)));
     const box = footprint.length ? bounds(footprint) : { minX: east, maxX: east, minY: north, maxY: north };
