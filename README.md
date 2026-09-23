@@ -32,7 +32,7 @@ All calculations, recommendations and map assets work offline. Missing credentia
 4. Switch between **Plan A** and **Your plan** to compare the same city view. **Timeline** shows the illustrative intermediate progression and exact final result.
 5. Click **Explain my plan** in the result window for a live or clearly labeled offline briefing. Its calculation evidence and optional voice controls stay with the displayed text. Voice playback requires a button press and is disclosed as AI-generated, with browser speech/text fallback.
 
-To build your own plan, choose a project card, then click its district or use the labeled district controls; city-wide projects apply to all modeled districts. Hover/focus a card for details. Select a district to focus the camera; landmark labels focus their mapped locations, and **Fit city** shows the entire map. The planner remains usable if WebGL fails. Open `/?view=2d` to try the compatibility view. [Demo and submission checklist](docs/DEMO.md).
+To build your own plan, choose a project card, then click its district or use the labeled district controls; city-wide projects apply to all modeled districts. Hover/focus a card for details. Select a district to focus the camera; **Fit city** shows the entire map. Landmark names stay off the main scene. The planner remains usable if WebGL fails. Open `/?view=2d` to try the compatibility view. [Demo and submission checklist](docs/DEMO.md).
 
 ## Rules and exact model
 
@@ -74,7 +74,8 @@ Calls have a 25-second limit, a concurrency bound and a small memory cache. Prov
 - `shared/optimizer.js`: deterministic single-change search with locks.
 - `server/`: native Node HTTP server, grounded AI adviser and optional speech generation.
 - `data/astana.json`: offline official district, road and water geometry.
-- `data/city-details.json`: attributed landmark footprints/positions and real park boundaries.
+- `data/city-details.json`: fourteen attributed landmark positions, thirteen footprints, three real park boundaries and the mapped LRT route with eighteen stations.
+- `public/assets/projects/`: fourteen distinct AI-generated project illustrations; [art direction and exact prompts](docs/PROJECT-ART.md).
 - `public/`: browser frontend and procedural city; vendored Three.js.
 - `test/acceptance/`: independent Python oracle and expected fixtures.
 - `tests/`: engine, HTTP, AI boundary and independent acceptance checks.
@@ -94,10 +95,10 @@ Tests compare dataset fields, baseline and reference plans against an independen
 
 ## Geography and limits
 
-The official Astana public geoportal provides the district, road and water backdrop. Road and water geometry is simplified for display. The geography API also supplies four landmark footprints/positions and three real park boundaries, with municipal and OpenStreetMap sources attributed separately. Current Astana has six districts; the challenge supplies five synthetic scoring rows. **Sarayshyk is outside this scenario**, without invented metrics or redistributed population shares. Ordinary buildings, project sites and landmark vertical forms are illustrative. Cars, pedestrians and emoji reactions do not represent real behavior predictions.
+The official Astana public geoportal provides the district, road and water backdrop. Road and water geometry is simplified for display. The geography API also supplies fourteen landmark positions (including EXPO's Nur Alem), thirteen footprints, three real park boundaries and the mapped LRT route with eighteen stations, with municipal and OpenStreetMap sources attributed separately. Existing LRT is a decorative backdrop independent of intervention M3. Current Astana has six districts; the challenge supplies five synthetic scoring rows. **Sarayshyk is outside this scenario**, without invented metrics or redistributed population shares. Ordinary buildings, project sites and landmark vertical forms are illustrative. Cars, pedestrians and emoji reactions do not represent real behavior predictions.
 
 Costs are virtual units. This is not financial ROI, a real traffic model, measured happiness or a validated policy forecast. No individual resident data is used. All geographic source links and processing details are in [data/README.md](data/README.md).
 
 ## Participant and tools
 
-**Nartay Aikyn** is the sole human participant and project lead. Codex-A assists with planning, backend, scene integration and construction visuals; Codex-B with the frontend, city motion and replay controls; Claude with mapped landmark/park models, independent tests and review. Runtime AI is used for the grounded adviser and optional narration. Git authorship remains the participant’s; these tools are disclosed and are not additional human participants.
+**Nartay Aikyn** is the sole human participant and project lead. Codex-A assists with planning, backend, scene integration and construction visuals; Codex-B with the frontend, city motion and replay controls; Claude with mapped landmark/park models, independent tests and review. Built-in image generation produced the decorative project card artwork. Runtime AI is used for the grounded adviser and optional narration. Git authorship remains the participant’s; these tools are disclosed and are not additional human participants.

@@ -5,25 +5,33 @@ Shared modules must not use Node APIs so the same functions run in browser and s
 
 ## Ownership
 
-- codex-A: `shared/**`, `server/**`, `data/**`, `scripts/**`, `public/vendor/**`, `tests/engine.test.mjs`, `tests/server.test.mjs`, configuration/manifests, README, this contract and integration. R04 expands sourced geographic data; do not edit `public/city.js` while B owns R05.
-- codex-b: R05 owns `public/city.js` and `docs/FRONTEND.md` for representative existing service buildings at quarter zero and related project upgrades. Preserve the integrated construction/replay behavior. HUD source stays unchanged unless a concrete integration defect requires a bounded correction. Read the shared STYLE-GUIDE.md before starting.
+- codex-A: `shared/**`, `server/**`, `data/**`, `scripts/**`, `public/vendor/**`, `public/assets/projects/**`, `docs/PROJECT-ART.md`, `tests/engine.test.mjs`, `tests/server.test.mjs`, configuration/manifests, README, this contract and integration. R04 geographic data is complete. R10 finishes approved art and combined checks.
+- codex-b: R07 owns `public/app.js`, `public/index.html`, `public/styles.css` and `docs/FRONTEND.md` for the illustrated card deck. After R07 integration acknowledgment, R08 owns `public/city.js` for city spacing, architectural colors and additional baseline services; CSS changes are limited to the matching white background. Preserve all construction/replay/hover behavior. Read the shared STYLE-GUIDE.md before starting.
 - claude: next checkpoint builds `public/city-details.js` and `docs/CITY-DETAILS.md`. Review files remain `test/acceptance/**`, `tests/acceptance.test.mjs`, `docs/ACCEPTANCE.md`, `docs/REVIEW.md`, but the immediate assignment is building the map-detail module. No edits to other public files.
 
 ### Immediate scene integration contract
 
 Claude exports `createCityDetails({THREE,geography,project,groundY=.16})`, returning
 `{group,landmarkAnchors,isReserved,dispose}`. `project([lon,lat])` returns local
-`[eastKm,northKm]`; Three x=east, z=-north. The returned Group includes the four
+`[east,north]` in scene units; Three x=east, z=-north. The returned Group includes
 mapped landmarks and three park surfaces with sparse trees. No DOM, network,
 global scene or application state mutation. Reuse supplied THREE and cap trees
 to about 90 total. Respect Polygon/MultiPolygon and holes. Landmark vertical
 forms may be exaggerated for the miniature style, while horizontal placement
 follows the supplied footprints. `landmarkAnchors` is
 `[{id,name,position:[x,y,z]}]`; A handles any HTML labels. `isReserved(point,clearance=0)`
-accepts `[eastKm,northKm]` and detects park/landmark interiors or boundary distance
-within `clearance` kilometers, including an enlarged visible landmark base.
+accepts `[east,north]` and detects park/landmark interiors or boundary distance
+within `clearance` scene units, including an enlarged visible landmark base.
 `dispose()` releases the module's own geometries/materials. A wires this module
 into `city.js`; B must not duplicate it.
+
+R08/R09 spacing refinement: the renderer may multiply the local kilometer
+projection by approximately two horizontally. Every geographic layer consumes
+the same supplied projection; do not scale landmark positions independently.
+Source lon/lat, topology, district identities and official math stay unchanged.
+Use modest, readable model dimensions rather than doubling the entire scene.
+Reservations must cover actual rendered geometry at the chosen projection scale.
+Building heights and placements of ordinary services remain illustrative.
 
 ### Expanded mapped backdrop — R04/R05/R06
 
