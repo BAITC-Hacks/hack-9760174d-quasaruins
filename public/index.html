@@ -41,12 +41,14 @@
           <div class="scene-topline"><span id="scene-state" class="scene-state">BASELINE CITY</span><div class="scene-tools"><button id="reset-view" class="map-button" aria-label="Fit the whole city" title="Fit the whole city">⌖ <span>Fit city</span></button><button id="pause-city" class="map-button" aria-pressed="false">Pause motion</button></div></div>
           <div id="city-canvas" class="city-canvas" aria-label="Isometric Astana city visualization"></div>
           <div id="city-labels" class="city-labels"></div>
+          <div id="city-reactions" class="city-reactions" aria-hidden="true"></div>
           <div id="city-fallback" class="city-fallback" hidden></div>
           <div id="scene-loading" class="scene-loading"><span class="loading-orbit" aria-hidden="true"></span><span>Preparing your miniature city…</span></div>
           <div class="map-caption"><span><span class="legend-square"></span> Real geography · representative buildings</span><span>Drag to orbit · scroll to zoom</span></div>
         </div>
         <div id="district-shortcuts" class="district-shortcuts" aria-label="Focus a district"></div>
         <div class="comparison-bar"><div class="view-switch" aria-label="Compare city views"><button data-view="before" aria-pressed="false">Before</button><button data-view="after" aria-pressed="true">Your plan</button><button id="view-a" data-view="a" aria-pressed="false" disabled>Plan A</button></div><button id="pin-plan" class="button subtle" disabled>Pin as Plan A <span aria-hidden="true">＋</span></button></div>
+        <div id="project-change-summary" class="project-change-summary"></div>
         <p id="scene-description" class="scene-description">Choose projects to preview their locations. Buildings and placement are illustrative.</p>
       </section>
 

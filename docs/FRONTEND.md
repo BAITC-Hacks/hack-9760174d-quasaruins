@@ -1,4 +1,4 @@
-# Frontend checkpoint I02
+# Frontend — I02
 
 Light, browser-native Akim Lab frontend. Start with `PORT=3001 ./scripts/start.sh` for the builder worktree (lead uses port 3000). Three.js and OrbitControls are locally vendored by the lead; no CDN or frontend build/install step is needed.
 
@@ -8,6 +8,7 @@ Light, browser-native Akim Lab frontend. Start with `PORT=3001 ./scripts/start.s
 - `public/styles.css`: fixed light palette, laptop layout, small-screen layout, keyboard focus, reduced motion and print styles.
 - `public/app.js`: plan state, shared evaluator wiring, project/target controls, result/evidence rendering, saved plans, API requests and exports.
 - `public/city.js`: geographic projection, procedural presentation, camera, project visuals and fallback. Contains no policy score/effect calculations.
+- `public/city-motion.js`: pure distance-based interpolation along supplied roads; no traffic or citizen behavior simulation.
 
 The browser imports `DATASET`/`EXAMPLE_PLAN` and `BASELINE`/`validatePlan`/`simulatePlan` from the contract paths. Missing scene assets cannot prevent the planner from loading. Dataset/model loading failure is visible and never replaced by invented numeric fixtures.
 
@@ -42,4 +43,17 @@ Checked on port 3001 against the merged engine/backend/geography baseline `bf497
 - Browser: 390px viewport has no horizontal page overflow and Reset remains available. The 3D map, district focus and project layers render.
 - Browser: forced 2D compatibility view still simulates the published example at 56.54 / +3.99, removes a project without retaining an official score, and restores five choices with Undo. It also has no horizontal overflow at 390px.
 
-Further manual checks and limitations are recorded in the worker handoff. This first checkpoint does **not** yet include moving ambient cars/pedestrians, reaction bursts, landmark silhouettes, full changed-asset highlighting or performance profiling. Those are subsequent increments; required numeric behavior is already wired.
+These checks describe the first checkpoint, `ff05bcc`. Further checks and exact commit/port are recorded in the worker handoff.
+
+## Second increment: city life and comparison clarity
+
+- At most 22 small cars and 28 pedestrians follow deterministic samples of the supplied urban road paths. Distance interpolation handles duplicate vertices, endpoints and reversing direction. The speed/density are cosmetic constants, not derived traffic forecasts or resident counts. Shared instanced meshes keep this small population inexpensive to draw.
+- Road and water features are combined into one draw object each; base trees are instanced. Geographic outlines and coordinates are preserved, including holes. This reduces object/draw overhead without replacing the source map with invented geometry.
+- Applying a new valid plan creates at most four short reaction labels from `result.contributions[].effects`, already realized by the engine. Negative effects use a caution marker; effects are before synergy. Reactions last at most 1.8 seconds, clear on edits/baseline/Plan A/pause, and do not replay merely from toggling a view. They are illustrative, not measured sentiment. Exact numbers remain in the persistent inspector.
+- Pause freezes road activity and suppresses reactions. Reduced-motion preferences are respected on load and when changed: city animation stays paused, reaction bursts are omitted, and camera transitions complete immediately. The control says Reduced motion while that preference is active.
+- Comparison chips show added and removed project/district pairs relative to pinned A. Green rings mark additions in the current view; amber rings mark the corresponding old assets in Plan A. A chip selects the appropriate view and focuses that project, or focuses its district in 2D mode. Retargeting counts as an old site removed and a new site added. An unchanged plan still exposes project-inspection chips.
+- Initial urban framing focuses the selected Nura district, while Fit city retains the complete geographic overview. Labels avoid overlap without moving their geographic anchors.
+
+Validation for this increment includes the 71-test merged model/server/acceptance suite, direct road-interpolation edge checks, real browser reaction values (school +10, clinic +8.75), camera/project comparison controls and pause/resume. Two cropped paused-canvas captures were identical; moving-state captures changed. The comparison flow showed one addition/one removal, 57.21 for current B, and 56.54 for the corresponding pinned A.
+
+Remaining limits: representative assets rather than surveyed buildings; no landmark silhouettes, individual pathfinding or calibrated travel times; no promised frame rate. Export/print artifacts and a deliberately delayed network-race scenario still require manual review. OS-level reduced-motion changes are handled in code; that system setting has not been changed during the browser check.
