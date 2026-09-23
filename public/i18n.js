@@ -317,6 +317,12 @@ const ENTRIES = [
   ['The 3D view is unavailable. Use the district controls below; planning and calculations still work.', '3D көрініс қолжетімсіз. Төмендегі аудан батырмаларын қолданыңыз; жоспарлау мен есептеу жұмыс істейді.', '3D-вид недоступен. Используйте кнопки районов ниже; планирование и расчёты работают.'],
   ['The city calculation model could not load. Your browser has not calculated a score. Reload to retry.', 'Қаланы есептеу моделі жүктелмеді. Балл есептелмеді. Бетті қайта жүктеңіз.', 'Модель расчёта не загрузилась. Балл не рассчитан. Перезагрузите страницу.'],
   ['Reload', 'Қайта жүктеу', 'Перезагрузить'],
+  ['Illustrative reaction to this project’s computed effect before synergy; not measured resident sentiment.', 'Жобаның синергияға дейінгі есептелген әсеріне иллюстрациялық реакция; тұрғындардың нақты пікірі емес.', 'Условная реакция на расчётный эффект проекта до синергии; не измеренное мнение жителей.'],
+  ['Q0 baseline', '0-тоқсан · бастапқы', 'Кв. 0 · исходно'],
+  ['Q8 official', '8-тоқсан · ресми', 'Кв. 8 · официально'],
+  ['Existing service at baseline.', 'Бастапқы деңгейдегі қолданыстағы нысан.', 'Существующий объект на исходном уровне.'],
+  ['Project addition completed.', 'Жоба бойынша кеңейту аяқталды.', 'Расширение по проекту завершено.'],
+  ['Project planned or under construction; existing service remains.', 'Жоба жоспарланған немесе салынуда; қолданыстағы нысан жұмыс істейді.', 'Проект запланирован или строится; существующий объект работает.'],
   ['The project library will appear when the shared model is available.', 'Модель жүктелгенде жобалар кітапханасы пайда болады.', 'Библиотека проектов появится, когда модель загрузится.'],
 ];
 const DICT = new Map(ENTRIES.map(([en, kk, ru]) => [en, { kk, ru }]));
@@ -376,6 +382,22 @@ const PATTERNS = [
   [/^(.+) in (.+), (existing service|project upgraded)$/, { kk: (m, t) => `${t(m[1])}, ${t(m[2])}: ${m[3] === 'existing service' ? 'қолданыстағы нысан' : 'жоба арқылы жақсартылды'}`, ru: (m, t) => `${t(m[1])}, ${t(m[2])}: ${m[3] === 'existing service' ? 'существующий объект' : 'улучшено проектом'}` }],
   [/^(.+) · Outside this scenario$/, { kk: (m, t) => `${t(m[1])} · сценарийден тыс`, ru: (m, t) => `${t(m[1])} · вне сценария` }],
   [/^(.+) · mapped location, stylized model$/, { kk: (m, t) => `${t(m[1])} · картадағы орны, стильдендірілген модель`, ru: (m, t) => `${t(m[1])} · место по карте, стилизованная модель` }],
+  [/^Q(\d+) illustrative$/, { kk: (m) => `${m[1]}-тоқсан · иллюстрация`, ru: (m) => `Кв. ${m[1]} · условно` }],
+  [/^((?:M\d+)(?: \+ M\d+)+) · (.+?): (.+)$/, { kk: (m, t) => `${m[1]} · ${t(m[2])}: ${t(m[3])}`, ru: (m, t) => `${m[1]} · ${t(m[2])}: ${t(m[3])}` }],
+  [/^(.+) · representative existing (.+), illustrative location\. (.+): ([\d.]+)( \(baseline [\d.]+\))?\. (.+)$/, {
+    kk: (m, t) => `${t(m[1])} · ${t(capitalize(m[2]))} (иллюстрациялық орын). ${t(m[3])}: ${m[4]}${m[5] ? ` (бастапқы ${m[5].match(/[\d.]+/)[0]})` : ''}. ${t(m[6])}`,
+    ru: (m, t) => `${t(m[1])} · ${t(capitalize(m[2]))} (условное место). ${t(m[3])}: ${m[4]}${m[5] ? ` (исходно ${m[5].match(/[\d.]+/)[0]})` : ''}. ${t(m[6])}` }],
+  [/^(.+), district score ([\d.]+)(?:, change ([+\-−][\d.]+))?$/, {
+    kk: (m, t) => `${t(m[1])}, аудан балы ${m[2]}${m[3] ? `, өзгеріс ${signed(m[3])}` : ''}`,
+    ru: (m, t) => `${t(m[1])}, балл района ${m[2]}${m[3] ? `, изменение ${signed(m[3])}` : ''}` }],
+  [/^([A-Z]\d): (.+)$/, { kk: (m, t, known) => (known(m[2]) ? `${m[1]}: ${t(m[2])}` : null), ru: (m, t, known) => (known(m[2]) ? `${m[1]}: ${t(m[2])}` : null) }],
+  [/^Focus (.+) city-wide$/, { kk: (m, t) => `Көрсету: ${t(m[1])} · бүкіл қала`, ru: (m, t) => `Показать: ${t(m[1])} · весь город` }],
+  [/^Focus (.+) in (.+)$/, { kk: (m, t, known) => (known(m[2]) ? `Көрсету: ${t(m[1])} · ${t(m[2])}` : null), ru: (m, t, known) => (known(m[2]) ? `Показать: ${t(m[1])} · ${t(m[2])}` : null) }],
+  [/^(.+) — realized project effects before synergy$/, {
+    kk: (m, t) => `${m[1].split('; ').map((part) => part.replace(/^(.+): /, (_, name) => `${t(name)}: `)).join('; ')} — синергияға дейінгі жоба әсерлері`,
+    ru: (m, t) => `${m[1].split('; ').map((part) => part.replace(/^(.+): /, (_, name) => `${t(name)}: `)).join('; ')} — эффекты проектов до синергии` }],
+  // Reaction bubbles such as "♥ +10 Schools and childcare".
+  [/^(\S+) ([+\-−][\d.]+) (.+)$/, { kk: (m, t, known) => (known(m[3]) ? `${m[1]} ${signed(m[2])} ${t(m[3])}` : null), ru: (m, t, known) => (known(m[3]) ? `${m[1]} ${signed(m[2])} ${t(m[3])}` : null) }],
   [/^(.+) \+$/, { kk: (m, t, known) => (known(m[1]) ? `${t(m[1])} +` : null), ru: (m, t, known) => (known(m[1]) ? `${t(m[1])} +` : null) }],
   // Effect chips such as "Road flow +16" or "Air quality −2".
   [/^(.+?):? ([+\-−]\d+(?:\.\d+)?)$/, { kk: (m, t, known) => (known(m[1]) ? `${t(m[1])} ${signed(m[2])}` : null), ru: (m, t, known) => (known(m[1]) ? `${t(m[1])} ${signed(m[2])}` : null) }],
