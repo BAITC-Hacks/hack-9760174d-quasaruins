@@ -45,7 +45,7 @@ test('real offline geography has all six districts and explicit model distinctio
   const geo=await response.json();assert.equal(geo.districts.features.length,6);
   assert.equal(geo.districts.features.find(f=>f.properties.id==='sarayshyk').properties.modeled,false);
   assert.equal(geo.roads.features.length,1930);assert.equal(geo.water.features.length,1135);
-  assert.equal(geo.landmarks.features.length,4);assert.equal(geo.parks.features.length,3);
+  assert.equal(geo.landmarks.features.length,14);assert.equal(geo.parks.features.length,3);
   assert.match(geo.credit,/OpenStreetMap/);assert.equal(geo.attributionUrl,'https://www.openstreetmap.org/copyright');
   // Catch coordinate order/orientation errors that would move the landmarks
   // off the central axis or swap the palace to the opposite river bank.
@@ -53,7 +53,15 @@ test('real offline geography has all six districts and explicit model distinctio
   assert.ok(landmark('khan-shatyr')[0]<landmark('bayterek')[0]);
   assert.ok(landmark('bayterek')[0]<landmark('ak-orda')[0]);
   assert.ok(landmark('ak-orda')[0]<landmark('peace-palace')[0]);
-  for(const f of [...geo.landmarks.features,...geo.parks.features]) {
+  assert.ok(landmark('grand-mosque')[1]<landmark('nur-alem')[1]);
+  assert.ok(landmark('nur-alem')[1]<landmark('bayterek')[1]);
+  assert.ok(landmark('peace-palace')[0]<landmark('hazret-sultan')[0]);
+  const track=geo.lrt.line.features[0].geometry.coordinates,stops=geo.lrt.stations.features;
+  assert.equal(geo.lrt.line.features.length,1);assert.equal(stops.length,18);
+  assert.equal(new Set(stops.map(f=>f.properties.id)).size,18);
+  assert.deepEqual(track[0],stops[0].geometry.coordinates);assert.deepEqual(track.at(-1),stops.at(-1).geometry.coordinates);
+  for(const stop of stops)assert.ok(track.some(p=>p[0]===stop.geometry.coordinates[0]&&p[1]===stop.geometry.coordinates[1]),'Stops must lie on the mapped route.');
+  for(const f of [...geo.landmarks.features,...geo.parks.features,...geo.lrt.line.features,...stops]) {
     assert.equal(f.properties.scored,false);assert.match(f.properties.sourceUrl,/^https:/);
   }
   for(const layer of ['districts','water','parks'])for(const f of geo[layer].features) {
