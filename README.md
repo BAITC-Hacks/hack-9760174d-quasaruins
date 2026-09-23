@@ -4,7 +4,7 @@
 
 Choose five city projects with a budget of 100. Explore their effects across five modeled districts, compare futures and get an AI-curated briefing grounded in an inspectable simulation.
 
-**Playable checkpoint:** light isometric Astana, project selection, rule validation, building upgrades, exact results, pinned Plan A comparison and a grounded AI adviser work end to end. Moving cars, pedestrians and reaction effects are the next visual increment.
+**Playable checkpoint:** a full-screen light miniature of Astana with a compact HUD, bottom project cards, mapped landmarks and parks, moving cars/pedestrians, and construction replay. Exact results, a timeline chart, pinned Plan A comparison, a grounded AI briefing and optional narration work through the same planning flow.
 
 ## Run
 
@@ -26,13 +26,13 @@ All calculations, recommendations and map assets work offline. Missing credentia
 
 ## Try the complete flow
 
-1. Click **Try an example**, then **Simulate my city**: cost95, score56.54, zero critical indicators.
-2. Pin it as **Plan A**, and check **Keep in advice** for the Nura school.
-3. Click **Find one improvement**, inspect the verified swap, then **Apply verified change**: cost100, score57.21.
-4. Switch between **Plan A** and **Your plan** to compare the same city view.
-5. Click **Explain my plan** for a live or clearly labeled offline briefing; inspect its calculation evidence.
+1. Click **Example**, then **Start**. Construction follows the project delays; use Pause or 1×/2×/4×. Only the end of quarter 8 shows the official result: cost95, score56.54, zero critical indicators.
+2. Pin the completed result as **Plan A**. Open **Project slots** and check **Keep in advice** for the Nura school.
+3. Open **Statistics**, click **Find one improvement**, inspect the verified swap, then **Apply verified change**: cost100, score57.21 after the new run.
+4. Switch between **Plan A** and **Your plan** to compare the same city view. **Timeline** shows the illustrative intermediate progression and exact final result.
+5. Click **Explain my plan** in the result window for a live or clearly labeled offline briefing. Its calculation evidence and optional voice controls stay with the displayed text. Voice playback requires a button press and is disclosed as AI-generated, with browser speech/text fallback.
 
-Select a district to focus the camera; **Fit city** shows the entire map. The planner remains usable if WebGL fails. Open `/?view=2d` to try the compatibility view. [Demo and submission checklist](docs/DEMO.md).
+To build your own plan, choose a project card, then click its district or use the labeled district controls; city-wide projects apply to all modeled districts. Hover/focus a card for details. Select a district to focus the camera; landmark labels focus their mapped locations, and **Fit city** shows the entire map. The planner remains usable if WebGL fails. Open `/?view=2d` to try the compatibility view. [Demo and submission checklist](docs/DEMO.md).
 
 ## Rules and exact model
 
@@ -70,17 +70,18 @@ Calls have a 25-second limit, a concurrency bound and a small memory cache. Prov
 ## Architecture
 
 - `shared/city-data.js`: immutable source dataset and example plan.
-- `shared/simulation.js`: pure validation, evaluation and score ledger.
+- `shared/simulation.js`: pure validation, evaluation, score ledger and shared illustrative replay.
 - `shared/optimizer.js`: deterministic single-change search with locks.
-- `server/`: native Node HTTP server and grounded AI adviser.
+- `server/`: native Node HTTP server, grounded AI adviser and optional speech generation.
 - `data/astana.json`: offline official district, road and water geometry.
+- `data/city-details.json`: attributed landmark footprints/positions and real park boundaries.
 - `public/`: browser frontend and procedural city; vendored Three.js.
 - `test/acceptance/`: independent Python oracle and expected fixtures.
 - `tests/`: engine, HTTP, AI boundary and independent acceptance checks.
 
 See [the interface contract](docs/CONTRACT.md), [acceptance criteria](docs/ACCEPTANCE.md) and [map provenance](data/README.md). Endpoints: `/api/health`, `/api/dataset`, `/api/geography`, `/api/simulate`, `/api/suggest`, `/api/advice`, `/api/speech`. Caller-supplied scores are ignored and recomputed. The optional speech endpoint returns AI-generated MP3 narration of the supplied briefing, using `gpt-4o-mini-tts`/`cedar`; no key or unavailable service returns a recoverable error. Playback controls and disclosure are frontend responsibilities.
 
-`timelinePlan` supplies an optional construction replay for quarters 0–8. Intermediate values are illustrative (`effect * max(0,quarter-lag)/8`, then active fixed synergies, clipping and the usual score). Only the quarter-eight result is official, and it exactly equals `simulatePlan`. The replay introduces no extra benefits or scoring rules.
+`timelinePlan` supplies the construction replay for quarters 0–8. Intermediate values are illustrative (`effect * max(0,quarter-lag)/8`, then active fixed synergies, clipping and the usual score). Only the quarter-eight result is official, and it exactly equals `simulatePlan`. The replay introduces no extra benefits or scoring rules. Reduced motion skips the animation and preserves the result.
 
 ## Verify
 
@@ -99,4 +100,4 @@ Costs are virtual units. This is not financial ROI, a real traffic model, measur
 
 ## Participant and tools
 
-**Nartay Aikyn** is the sole human participant and project lead. Codex-A assists with planning, backend and integration; Codex-B with the frontend and 3D scene; Claude with independent tests and review. Runtime AI is used for the grounded adviser. Git authorship remains the participant’s; these tools are disclosed and are not additional human participants.
+**Nartay Aikyn** is the sole human participant and project lead. Codex-A assists with planning, backend, scene integration and construction visuals; Codex-B with the frontend, city motion and replay controls; Claude with mapped landmark/park models, independent tests and review. Runtime AI is used for the grounded adviser and optional narration. Git authorship remains the participant’s; these tools are disclosed and are not additional human participants.
