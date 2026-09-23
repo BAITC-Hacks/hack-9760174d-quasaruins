@@ -4,7 +4,7 @@
 
 Choose five city projects with a budget of 100. Explore their effects across five modeled districts, compare futures and get an AI-curated briefing grounded in an inspectable simulation.
 
-**Current checkpoint:** simulation, HTTP API, one-change optimizer, official geographic backdrop and AI adviser are implemented. The light isometric frontend is being built in parallel and will be integrated next. Until then, `/api/health` and other API endpoints work; `/` has no frontend yet.
+**Playable checkpoint:** light isometric Astana, project selection, rule validation, building upgrades, exact results, pinned Plan A comparison and a grounded AI adviser work end to end. Moving cars, pedestrians and reaction effects are the next visual increment.
 
 ## Run
 
@@ -23,6 +23,16 @@ OPENAI_API_KEY='' node server/main.mjs
 ```
 
 All calculations, recommendations and map assets work offline. Missing credentials, provider failures and timeouts return a clearly labeled deterministic explanation. The health endpoint reports configuration status, never the key.
+
+## Try the complete flow
+
+1. Click **Try an example**, then **Simulate my city**: cost95, score56.54, zero critical indicators.
+2. Pin it as **Plan A**, and check **Keep in advice** for the Nura school.
+3. Click **Find one improvement**, inspect the verified swap, then **Apply verified change**: cost100, score57.21.
+4. Switch between **Plan A** and **Your plan** to compare the same city view.
+5. Click **Explain my plan** for a live or clearly labeled offline briefing; inspect its calculation evidence.
+
+Select a district to focus the camera; **Fit city** shows the entire map. The planner remains usable if WebGL fails. Open `/?view=2d` to try the compatibility view. [Demo and submission checklist](docs/DEMO.md).
 
 ## Rules and exact model
 
