@@ -24,6 +24,7 @@ test('visual effects respect replay completion, before/draft views, removal and 
   for(const g of trees){const d=fixture().districts.find(d=>d.id===g.userData.districtId);assert.ok(g.userData.treePoints.length>0);for(const p of g.userData.treePoints){assert.ok(fixture().landAt(p,d));assert.equal(fixture().isReserved(p),false);}}
   effects.update({mode:'before',selections});assert.equal(effects.group.children.length,0);
   effects.update({mode:'draft',selections});assert.equal(effects.group.children.length,0);
+  effects.update({mode:'a',selections,replay:{completedMeasureIds:[]}});assert.equal(effects.group.children.length,3,'Pinned comparison uses its completed plan, not the active replay quarter');
   effects.update({mode:'after',selections:[]});assert.equal(effects.group.children.length,0);
   effects.dispose();effects.dispose();
 });

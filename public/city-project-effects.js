@@ -186,7 +186,7 @@ export function createProjectEffects({THREE,roads=[],districts=[],architecture=[
   function clear(){group.traverse(child=>{if(child.isInstancedMesh)child.dispose();});group.clear();moving.length=0;}
   function update(props={}) {
     if(disposed)return;
-    const selections=props.selections??[],completed=props.replay?new Set(props.replay.completedMeasureIds??[]):null;
+    const selections=props.selections??[],completed=props.mode==='after'&&props.replay?new Set(props.replay.completedMeasureIds??[]):null;
     const enabled=props.mode==='after'||props.mode==='a';
     const active=enabled?selections.filter(s=>!completed||completed.has(s.measureId)):[];
     const next=JSON.stringify(active.map(s=>[s.measureId,s.districtId]).sort());if(signature===next)return;
