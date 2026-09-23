@@ -6,6 +6,8 @@
  * enlarged rendered footprint as well as the mapped one.
  */
 const TREE_CAP = 90;
+const TREE_LANDMARK_CLEARANCE = 0.18; // km beyond a model's footprint, so crowns never overlap monuments
+const TREE_WATER_CLEARANCE = 0.02; // km from mapped water edges, so trunks stay on land
 const LANDMARK_SIZE = {
   // Minimum rendered footprint (km) and stylized height (scene units) per model.
   'bayterek': { minSize: 0.16, height: 1.45 },
@@ -186,21 +188,39 @@ export function createCityDetails({ THREE, geography, project, groundY = 0.16 })
   }
 
   const insideLandmark = (point, margin) => zones.some((zone) => zone.kind === 'landmark' && (insidePolygons(point, zone.polygons) || Math.hypot(point[0] - zone.center[0], point[1] - zone.center[1]) <= zone.radius + margin));
-  const totalArea = parks.reduce((sum, park) => sum + park.area, 0);
+  // Mapped water near the parks (rivers, ponds); trees must not stand in it.
+  const water = [];
+  for (const feature of geography?.water?.features ?? []) {
+    for (const rings of polygonsOf(feature.geometry)) {
+      const projected = rings.map((ring) => ring.map(project)).filter((ring) => ring.length >= 3);
+      if (!projected.length) continue;
+      const box = bounds([projected], TREE_WATER_CLEARANCE);
+      if (parks.some((park) => box.maxX >= park.minX && box.minX <= park.maxX && box.maxY >= park.minY && box.minY <= park.maxY)) water.push({ polygons: [projected], ...box });
+    }
+  }
+  const inWater = (point) => water.some((area) => point[0] >= area.minX && point[0] <= area.maxX && point[1] >= area.minY && point[1] <= area.maxY
+    && (insidePolygons(point, area.polygons) || area.polygons[0].some((ring) => ringDistance(point, ring) < TREE_WATER_CLEARANCE)));
+  const treeSpot = (point, park) => insidePolygons(point, park.polygons) && !insideLandmark(point, TREE_LANDMARK_CLEARANCE) && !inWater(point)
+    && !park.polygons.some((rings) => rings.some((ring) => ringDistance(point, ring) < 0.03));
   const trees = [];
-  let remaining = TREE_CAP;
-  parks.forEach((park, index) => {
-    const quota = index === parks.length - 1 ? remaining : Math.min(remaining, Math.round(TREE_CAP * park.area / (totalArea || 1)));
-    remaining -= quota;
-    const random = seededRandom(`${park.id}-trees`);
+  let remaining = TREE_CAP, areaLeft = parks.reduce((sum, park) => sum + park.area, 0);
+  const plant = (park, quota, seed) => {
+    const random = seededRandom(seed);
     let placed = 0;
-    for (let attempt = 0; placed < quota && attempt < quota * 40; attempt += 1) {
+    for (let attempt = 0; placed < quota && attempt < quota * 80; attempt += 1) {
       const point = [park.minX + random() * (park.maxX - park.minX), park.minY + random() * (park.maxY - park.minY)];
-      if (!insidePolygons(point, park.polygons) || insideLandmark(point, 0.05)) continue;
-      if (park.polygons.some((rings) => rings.some((ring) => ringDistance(point, ring) < 0.03))) continue;
+      if (!treeSpot(point, park)) continue;
       trees.push({ x: point[0], z: -point[1], s: 0.55 + random() * 0.3 }); placed += 1;
     }
-  });
+    return placed;
+  };
+  // Share the cap by park area; any quota a park cannot fill (water, monuments) moves to the next park, then a second pass.
+  for (const park of parks) {
+    const quota = Math.min(remaining, Math.round(remaining * park.area / (areaLeft || 1)));
+    areaLeft -= park.area;
+    remaining -= plant(park, quota, `${park.id}-trees`);
+  }
+  for (const park of parks) if (remaining > 0) remaining -= plant(park, remaining, `${park.id}-trees-extra`);
   if (trees.length) {
     const trunks = new THREE.InstancedMesh(shared.trunk, colors.trunk, trees.length);
     const crowns = new THREE.InstancedMesh(shared.crown, colors.crown, trees.length);
