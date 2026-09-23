@@ -28,14 +28,14 @@ function usablePolygon(rings) {
   return outer ? [outer, ...rings.slice(1).map(usableRing).filter(Boolean)] : null;
 }
 
-export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost, loadingHost, onDistrictSelect, onCredit }) {
+export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost, loadingHost, onDistrictSelect, onCredit, onDistrictHover = () => {} }) {
   let THREE, OrbitControls, scene, camera, renderer, controls, geography, project, districtRecords = [], waterPolygons = [], waterAreas = [], roads = [], raycaster;
   let props = { selections: [], result: null, districtId: 'nura', mode: 'draft', paused: false };
   let signature = '', ready3d = false, disposed = false, frame, resizeObserver, focusTween, home, animationStart = 0, upgrades = [];
   let ambient = [], motionTime = 0, previousFrame = 0, ambientMeshes, reactions = [], lastReactedPlan = '', previousAppliedKeys = new Set();
-  let focusedProject = null, projectFocusLabel;
+  let focusedProject = null, projectFocusLabel, hoveredDistrictId = null, hoverLabel, cityDetails = null;
   let reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const materials = new Map(), geometries = new Map();
+  const materials = new Map(), geometries = new Map(), projectSites = new Map();
   const geometry = (id, factory) => { if (!geometries.has(id)) geometries.set(id, factory()); return geometries.get(id); };
   const material = (color, opacity = 1) => {
     const id = `${color}:${opacity}`;
@@ -43,6 +43,8 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
     return materials.get(id);
   };
   const landAt = (point, district) => insidePolygons(point, district.polygons) && !waterAreas.some((area) => point[0] >= area.minX && point[0] <= area.maxX && point[1] >= area.minY && point[1] <= area.maxY && insidePolygons(point, [area.rings]));
+  const buildableAt = (point, district, clearance = .34) => landAt(point, district) && !cityDetails?.isReserved(point, clearance)
+    && [[-1,-1],[1,-1],[1,1],[-1,1]].every(([x,y])=>landAt([point[0]+x*clearance,point[1]+y*clearance],district));
 
   function meshBox(parent, x, y, z, width, height, depth, color, opacity = 1) {
     const mesh = new THREE.Mesh(geometry('box', () => new THREE.BoxGeometry(1, 1, 1)), material(color, opacity));
@@ -108,9 +110,15 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
       const label = document.createElement('button'); label.type = 'button'; label.className = `district-map-label${district.modeled ? '' : ' unmodeled'}`; label.textContent = district.name;
       if (!district.modeled) { const small = document.createElement('small'); small.textContent = 'Outside this scenario'; label.append(small); label.title = 'No synthetic scenario data for this district'; }
       else label.addEventListener('click', () => onDistrictSelect(district.id));
+      label.addEventListener('pointerenter',()=>setHoveredDistrict(district.id));
+      label.addEventListener('pointerleave',()=>setHoveredDistrict(null));
+      label.addEventListener('focus',()=>setHoveredDistrict(district.id));
+      label.addEventListener('blur',()=>setHoveredDistrict(null));
       labelsHost.append(label); district.label = label;
     }
     projectFocusLabel=document.createElement('div');projectFocusLabel.className='project-map-focus';projectFocusLabel.hidden=true;labelsHost.append(projectFocusLabel);
+    hoverLabel=document.createElement('div');hoverLabel.className='project-map-focus';hoverLabel.hidden=true;
+    hoverLabel.style.pointerEvents='none';hoverLabel.style.zIndex='6';labelsHost.append(hoverLabel);
     // Thousands of static source features share two draw objects rather than one per feature.
     const waterVertices=[];
     for(const rings of waterPolygons){const indexed=new THREE.ShapeGeometry(shapeFor(rings));indexed.rotateX(-Math.PI/2);const flat=indexed.toNonIndexed();for(const value of flat.attributes.position.array)waterVertices.push(value);flat.dispose();indexed.dispose();}
@@ -129,10 +137,10 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
       for (let i = 0; i < 95; i += 1) {
         const base = candidates[Math.floor(random() * candidates.length)];
         const point = [base[0] + (random() - .5) * .55, base[1] + (random() - .5) * .55];
-        if (!landAt(point, district) || district.buildings.some((other) => Math.hypot(other[0] - point[0], other[1] - point[1]) < .25)) continue;
+        if (!buildableAt(point, district) || district.buildings.some((other) => Math.hypot(other[0] - point[0], other[1] - point[1]) < .35)) continue;
         district.buildings.push(point);
         buildingData.push({ x: point[0], z: -point[1], width: .18 + random() * .22, depth: .18 + random() * .3, height: .3 + random() ** 2 * 1.25 });
-        if (i % 2 === 0) { const green = [point[0] + .3, point[1] + .2]; if (landAt(green, district)) treeData.push([green[0], -green[1]]); }
+        if (i % 2 === 0) { const green = [point[0] + .3, point[1] + .2]; if (buildableAt(green, district,.2)) treeData.push([green[0], -green[1]]); }
       }
     }
     const boxes = new THREE.InstancedMesh(geometry('box', () => new THREE.BoxGeometry(1, 1, 1)), material(COLORS.building), buildingData.length);
@@ -179,14 +187,31 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
     Object.values(ambientMeshes).forEach(mesh=>{mesh.instanceMatrix.needsUpdate=true;});
   }
   function projectSite(district, measureId) {
+    const key=`${district.id}:${measureId}`;
+    if(projectSites.has(key))return projectSites.get(key);
+    const available=point=>buildableAt(point,district,.95)&&![...projectSites].some(([id,other])=>id.startsWith(district.id+':')&&Math.hypot(other[0]-point[0],other[1]-point[1])<2);
+    const reserve=point=>{if(point)projectSites.set(key,point);return point;};
     const random = rng(hash(`${district.id}:${measureId}`));
     const options = district.candidates.filter((p) => Math.hypot(p[0] - district.anchor[0], p[1] - district.anchor[1]) < 4);
-    for (let i = 0; i < 60; i += 1) {
+    for (let i = 0; i < 120; i += 1) {
       const base = options.length ? options[Math.floor(random() * options.length)] : district.anchor;
       const candidate = [base[0] + (random() - .5) * .6, base[1] + (random() - .5) * .6];
-      if (landAt(candidate, district) && [[-.5, -.5], [.5, -.5], [.5, .5], [-.5, .5]].every(([x, y]) => landAt([candidate[0] + x, candidate[1] + y], district))) return candidate;
+      if (available(candidate)) return reserve(candidate);
     }
-    return district.anchor;
+    // Never fall back to a site known to overlap a park, landmark or water.
+    return reserve(district.candidates.find(available) ?? null);
+  }
+  function constructionShape(group) {
+    meshBox(group,0,.17,0,1.25,.045,.9,0xded8c4);
+    for(const x of [-.58,.58])for(const z of [-.4,.4])cylinder(group,x,.2,z,.026,1.1,0xbe9c54);
+    for(const y of [.56,.98]) {
+      lines(group,[[-.58,y,-.4],[.58,y,-.4],[.58,y,.4],[-.58,y,.4],[-.58,y,-.4]].map(p=>new THREE.Vector3(...p)),0xb48c3e,.9);
+      meshBox(group,0,y,0,1.2,.035,.08,0xd6c29c);
+    }
+    cylinder(group,.72,.17,-.42,.045,1.6,COLORS.safety);
+    meshBox(group,.25,1.73,-.42,1.4,.065,.08,COLORS.safety);
+    lines(group,[new THREE.Vector3(-.35,1.76,-.42),new THREE.Vector3(-.35,.75,-.42)],0x8b886d);
+    meshBox(group,-.35,.67,-.42,.16,.1,.14,0xa9b5a3);
   }
   function projectShape(group, measureId, opacity) {
     const box = (x, z, w, h, d, color = COLORS.mint, y = .17) => meshBox(group, x, y, z, w, h, d, color, opacity);
@@ -224,17 +249,30 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
   }
   function updateUpgrades() {
     if (!ready3d) return;
-    const next = `${props.mode}:${props.selections.map((item) => `${item.measureId}:${item.districtId}`).sort().join('|')}:${(props.highlightKeys??[]).slice().sort().join('|')}`;
+    const replay = props.mode==='after' ? props.replay : null;
+    const completed = new Set(replay?.completedMeasureIds ?? []);
+    const next = `${props.mode}:${props.selections.map((item) => `${item.measureId}:${item.districtId}`).sort().join('|')}:${(props.highlightKeys??[]).slice().sort().join('|')}:${replay?replay.quarter:'final'}:${[...completed].sort().join(',')}`;
     if (next === signature) return;
+    const prior = new Map(upgrades.map(group=>[`${group.userData.measureId}:${group.userData.districtId}`,group.userData.constructing]));
     signature = next; clearUpgrades();
     if (props.mode === 'before') return;
     const opacity = props.mode === 'draft' ? .43 : 1;
-    for (const selection of props.selections) {
+    for (const selection of [...props.selections].sort((a,b)=>Number(a.measureId.slice(1))-Number(b.measureId.slice(1)))) {
       const targets = districtRecords.filter((district) => district.modeled && (selection.districtId === null || selection.districtId === district.id));
       for (const district of targets) {
         const group = new THREE.Group(), site = projectSite(district, selection.measureId);
-        group.position.set(site[0], 0, -site[1]); group.userData = { districtId: district.id, measureId: selection.measureId };
-        projectShape(group, selection.measureId, opacity);
+        if(!site)continue;
+        const constructing=Boolean(replay&&!completed.has(selection.measureId));
+        const justCompleted=prior.get(`${selection.measureId}:${district.id}`)===true&&!constructing;
+        group.position.set(site[0], 0, -site[1]);
+        group.scale.setScalar(.75);
+        group.userData = { districtId: district.id, measureId: selection.measureId, constructing, animate:justCompleted||(!replay&&props.mode==='after'), reveal:props.paused||reducedMotion?1:0 };
+        if(constructing)constructionShape(group);else projectShape(group, selection.measureId, opacity);
+        if(justCompleted&&!reducedMotion&&!props.paused) {
+          const dust=new THREE.Group(),dustMaterial=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.7,depthWrite:false});
+          for(let i=0;i<5;i++){const puff=new THREE.Mesh(geometry('dust',()=>new THREE.IcosahedronGeometry(1,0)),dustMaterial);const angle=i*Math.PI*2/5;puff.position.set(Math.cos(angle)*.45,.35,Math.sin(angle)*.35);puff.scale.set(.25,.18,.25);dust.add(puff);}
+          group.add(dust);group.userData.dust=dust;
+        }
         if((props.highlightKeys??[]).includes(`${selection.measureId}:${selection.districtId??'*'}`)){
           const ring=new THREE.Mesh(geometry('change-ring',()=>new THREE.RingGeometry(.76,.86,36)),new THREE.MeshBasicMaterial({color:props.mode==='a'?COLORS.safety:COLORS.green,transparent:true,opacity:.75*opacity,depthWrite:false,depthTest:false}));ring.rotation.x=-Math.PI/2;ring.position.y=.19;ring.renderOrder=3;group.add(ring);
         }
@@ -247,7 +285,7 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
   function clearReactions(){ reactions.forEach(reaction=>reaction.element.remove());reactions=[]; }
   function queueReactions(){
     clearReactions();
-    if(props.mode!=='after'||!props.result?.valid)return;
+    if(props.mode!=='after'||!props.result?.valid||(props.replay&&props.replay.quarter<8))return;
     const plan=props.selections.map(item=>`${item.measureId}:${item.districtId??'*'}`).sort().join('|');
     if(plan===lastReactedPlan)return;
     const newKeys=new Set(props.selections.map(item=>`${item.measureId}:${item.districtId??'*'}`).filter(item=>!previousAppliedKeys.has(item)));
@@ -278,11 +316,16 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
   function updateSelection() {
     for (const district of districtRecords) {
       const active = district.id === props.districtId;
+      const hovered = district.id === hoveredDistrictId;
       district.label?.classList.toggle('active', active);
-      for (const outline of district.outlines) { outline.material.color.set(active ? 0x6b9975 : 0xc3cdbb); outline.material.opacity = active ? 1 : .8; }
-      for (const mesh of district.meshes) mesh.material[0].color.set(active ? 0xdde8d1 : district.modeled ? COLORS.land : COLORS.outside);
+      for (const outline of district.outlines) { outline.material.color.set(hovered ? 0x327857 : active ? 0x6b9975 : 0xc3cdbb); outline.material.opacity = active||hovered ? 1 : .8; }
+      for (const mesh of district.meshes) mesh.material[0].color.set(hovered ? 0xd3e5c8 : active ? 0xdde8d1 : district.modeled ? COLORS.land : COLORS.outside);
     }
     if (!ready3d && geography) drawFallback();
+  }
+  function setHoveredDistrict(id,showLabel=false) {
+    if(id!==hoveredDistrictId){hoveredDistrictId=id;updateSelection();onDistrictHover(id);}
+    if(hoverLabel){const district=districtRecords.find(d=>d.id===id);hoverLabel.hidden=!district||!showLabel;if(district)hoverLabel.textContent=district.name+(district.modeled?'':' · Outside this scenario');}
   }
   function placeLabels() {
     if (!camera) return;
@@ -325,10 +368,17 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
   function tick(now) {
     if(disposed)return;
     const elapsed=previousFrame?Math.min(.05,(now-previousFrame)/1000):0;previousFrame=now;
-    if(!props.paused&&!reducedMotion){motionTime+=elapsed;updatePopulation();}
+    const moving=!props.paused&&!reducedMotion&&(!props.replay||props.replay.running);
+    const speed=props.replay?.speed??1;
+    if(moving){motionTime+=elapsed*speed;updatePopulation();}
     if(focusTween){const t=Math.min(1,(now-focusTween.start)/450),e=1-(1-t)**3;controls.target.lerpVectors(focusTween.fromTarget,focusTween.toTarget,e);camera.position.lerpVectors(focusTween.fromPosition,focusTween.toPosition,e);camera.zoom=focusTween.fromZoom+(focusTween.toZoom-focusTween.fromZoom)*e;camera.updateProjectionMatrix();if(t===1)focusTween=null;}
-    const scale=props.paused||reducedMotion?1:Math.min(1,(now-animationStart)/650);
-    for(const group of upgrades)group.scale.y=.65+.35*(1-(1-scale)**3);
+    for(const group of upgrades){
+      if(reducedMotion)group.userData.reveal=1;
+      else if(moving)group.userData.reveal=Math.min(1,group.userData.reveal+elapsed*speed/.7);
+      const progress=group.userData.animate?group.userData.reveal:1;
+      group.scale.y=.75*(.65+.35*(1-(1-progress)**3));
+      if(group.userData.dust){group.userData.dust.visible=progress<1;group.userData.dust.scale.setScalar(1+progress);group.userData.dust.children[0].material.opacity=.7*(1-progress);}
+    }
     controls.update();placeLabels();updateReactions(now);renderer.render(scene,camera);frame=requestAnimationFrame(tick);
   }
   function drawFallback() {
@@ -355,9 +405,22 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
       scene=new THREE.Scene();camera=new THREE.OrthographicCamera(-20,20,20,-20,.01,500);renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:'high-performance'});renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.5));renderer.setClearColor(0xf2f5e9,0);renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;canvasHost.append(renderer.domElement);
       controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.dampingFactor=.1;controls.minPolarAngle=Math.PI*.20;controls.maxPolarAngle=Math.PI*.37;controls.minZoom=.65;controls.maxZoom=6;controls.enablePan=true;controls.rotateSpeed=.5;controls.zoomSpeed=.8;controls.addEventListener('start',()=>{focusTween=null;});
       buildGeography();ready3d=true;raycaster=new THREE.Raycaster();
-      let pointerStart;
+      let pointerStart,lastHoverTime=0;
+      const districtAtPointer=event=>{
+        const rect=renderer.domElement.getBoundingClientRect();
+        raycaster.setFromCamera(new THREE.Vector2((event.clientX-rect.left)/rect.width*2-1,-(event.clientY-rect.top)/rect.height*2+1),camera);
+        const hit=raycaster.intersectObjects(districtRecords.flatMap(d=>d.meshes),false)[0];
+        return districtRecords.find(d=>d.id===hit?.object.userData.districtId);
+      };
       renderer.domElement.addEventListener('pointerdown',event=>{pointerStart=[event.clientX,event.clientY];});
-      renderer.domElement.addEventListener('pointerup',event=>{if(!pointerStart||Math.hypot(event.clientX-pointerStart[0],event.clientY-pointerStart[1])>5)return;const rect=renderer.domElement.getBoundingClientRect();raycaster.setFromCamera(new THREE.Vector2((event.clientX-rect.left)/rect.width*2-1,-(event.clientY-rect.top)/rect.height*2+1),camera);const hit=raycaster.intersectObjects(districtRecords.flatMap(d=>d.meshes),false)[0];const district=districtRecords.find(d=>d.id===hit?.object.userData.districtId);if(district?.modeled)onDistrictSelect(district.id);});
+      renderer.domElement.addEventListener('pointerup',event=>{const start=pointerStart;pointerStart=null;if(!start||Math.hypot(event.clientX-start[0],event.clientY-start[1])>5)return;const district=districtAtPointer(event);if(district?.modeled)onDistrictSelect(district.id);});
+      renderer.domElement.addEventListener('pointermove',event=>{
+        if(event.buttons){setHoveredDistrict(null);return;}
+        if(performance.now()-lastHoverTime<50)return;lastHoverTime=performance.now();
+        setHoveredDistrict(districtAtPointer(event)?.id??null,true);
+        if(hoverLabel&&!hoverLabel.hidden){const rect=canvasHost.getBoundingClientRect();hoverLabel.style.left=`${Math.max(95,Math.min(rect.width-95,event.clientX-rect.left))}px`;hoverLabel.style.top=`${Math.max(65,event.clientY-rect.top-28)}px`;}
+      });
+      renderer.domElement.addEventListener('pointerleave',()=>{pointerStart=null;setHoveredDistrict(null);});
       renderer.domElement.addEventListener('webglcontextlost',event=>{event.preventDefault();ready3d=false;cancelAnimationFrame(frame);drawFallback();});
       resizeObserver=new ResizeObserver(resize);resizeObserver.observe(canvasHost);resize();updateSelection();updateUpgrades();focusDistrict(props.districtId);frame=requestAnimationFrame(tick);
     } catch(error) { ready3d=false;console.warn('Using district fallback:',error.stack ?? error.message);drawFallback(); }
