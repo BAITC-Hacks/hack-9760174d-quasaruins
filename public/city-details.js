@@ -9,23 +9,24 @@ const TREE_CAP = 90;
 const TREE_LANDMARK_CLEARANCE = 0.18; // km beyond a model's footprint, so crowns never overlap monuments
 const TREE_WATER_CLEARANCE = 0.02; // km from mapped water edges, so trunks stay on land
 const LANDMARK_SIZE = {
-  // Minimum rendered footprint (km) and stylized height (scene units). Generic city buildings are 0.3-1.55 tall,
-  // so landmarks are deliberately larger and taller to read clearly from the default camera.
-  'bayterek': { minSize: 0.30, height: 2.3 },
-  'khan-shatyr': { minSize: 0.64, height: 1.5 },
-  'ak-orda': { minSize: 0.58, height: 1.2 },
-  'peace-palace': { minSize: 0.62, height: 0.74 },
-  'hazret-sultan': { minSize: 0.58, height: 1.25 },
-  'grand-mosque': { minSize: 0.66, height: 1.4 },
-  'nur-alem': { minSize: 0.52, height: 1.05 },
-  'kazakh-eli': { minSize: 0.32, height: 1.95 },
-  'astana-opera': { minSize: 0.58, height: 0.8 },
-  'concert-hall': { minSize: 0.62, height: 0.85 },
-  'astana-arena': { minSize: 0.82, height: 0.46 },
+  // Minimum rendered footprint (km) and height (scene units). Heights follow approximate real heights at about
+  // 1 unit per 100 m, so landmarks keep their true proportions to each other (Abu Dhabi Plaza, ~320 m, is compressed).
+  // Footprints are enlarged for readability; heights are not exaggerated.
+  'bayterek': { minSize: 0.26, height: 1.0 },       // ~97 m
+  'khan-shatyr': { minSize: 0.64, height: 1.5 },    // ~150 m
+  'ak-orda': { minSize: 0.58, height: 0.8 },        // ~80 m with spire
+  'peace-palace': { minSize: 0.62, height: 0.62 },  // ~62 m
+  'hazret-sultan': { minSize: 0.58, height: 0.78 }, // minarets ~77 m
+  'grand-mosque': { minSize: 0.66, height: 1.3 },   // minarets ~130 m
+  'nur-alem': { minSize: 0.52, height: 1.0 },       // ~100 m
+  'kazakh-eli': { minSize: 0.3, height: 0.91 },     // ~91 m
+  'astana-opera': { minSize: 0.58, height: 0.5 },
+  'concert-hall': { minSize: 0.62, height: 0.55 },
+  'astana-arena': { minSize: 0.82, height: 0.5 },
   'abu-dhabi-plaza': { minSize: 0.46, height: 2.6 },
-  'national-museum': { minSize: 0.58, height: 1.15 },
-  'mangilik-el-arch': { minSize: 0.42, height: 1.0 },
-  'generic': { minSize: 0.3, height: 1.2 },
+  'national-museum': { minSize: 0.58, height: 0.9 },
+  'mangilik-el-arch': { minSize: 0.42, height: 0.62 },
+  'generic': { minSize: 0.3, height: 0.9 },
 };
 
 function polygonsOf(geometry) {

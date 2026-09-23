@@ -22,24 +22,24 @@ details.dispose(); // frees geometries/materials, detaches and empties the group
 
 ## Landmarks
 
-Each landmark is a Point feature in `geography.landmarks` with `properties.model` (optional `footprint` polygon). Known models, drawn larger than ordinary buildings (0.3-1.55 tall) so they read clearly:
+Each landmark is a Point feature in `geography.landmarks` with `properties.model` (optional `footprint` polygon). Known models. Heights follow approximate real heights at about 1 scene unit per 100 m, so landmarks stay in proportion to each other (Abu Dhabi Plaza, about 320 m, is compressed to 2.6). Footprints are enlarged for readability; heights are not:
 
 | Model id | Look | Min footprint (km) | Height |
 | --- | --- | --- | --- |
-| `bayterek` | White tower, 16-rod lattice, gold orb | 0.30 | 2.3 |
+| `bayterek` | White tower, 16-rod lattice, gold orb (about 97 m) | 0.26 | 1.0 |
 | `khan-shatyr` | Tilted tent with cable rings and mast | 0.64 | 1.5 |
-| `ak-orda` | White palace, colonnade, blue dome, gold spire | 0.58 | 1.2 |
-| `peace-palace` | Stone pyramid, glass bands and apex | 0.62 | 0.74 |
-| `hazret-sultan` | Turquoise dome, four minarets | 0.58 | 1.25 |
-| `grand-mosque` | Large blue dome, four tall minarets | 0.66 | 1.4 |
-| `nur-alem` | Glass sphere with rings on a base | 0.52 | 1.05 |
-| `kazakh-eli` | White column with gold bird | 0.32 | 1.95 |
-| `astana-opera` | Colonnaded hall with dome | 0.58 | 0.8 |
-| `concert-hall` | Fan of turquoise petals | 0.62 | 0.85 |
-| `astana-arena` | Oval stadium with roof ring | 0.82 | 0.46 |
-| `abu-dhabi-plaza` | Glass tower cluster, tallest 2.6 | 0.46 | 2.6 |
-| `national-museum` | Turquoise blocks with domed tower | 0.58 | 1.15 |
-| `mangilik-el-arch` | Triumphal arch | 0.42 | 1.0 |
+| `ak-orda` | White palace, colonnade, blue dome, gold spire | 0.58 | 0.8 |
+| `peace-palace` | Stone pyramid, glass bands and apex | 0.62 | 0.62 |
+| `hazret-sultan` | Turquoise dome, four minarets | 0.58 | 0.78 |
+| `grand-mosque` | Large blue dome, four tall minarets | 0.66 | 1.3 |
+| `nur-alem` | Glass sphere with rings on a base | 0.52 | 1.0 |
+| `kazakh-eli` | White column with gold bird | 0.30 | 0.91 |
+| `astana-opera` | Colonnaded hall with dome | 0.58 | 0.5 |
+| `concert-hall` | Fan of turquoise petals | 0.62 | 0.55 |
+| `astana-arena` | Oval stadium with roof ring | 0.82 | 0.5 |
+| `abu-dhabi-plaza` | Glass tower cluster | 0.46 | 2.6 |
+| `national-museum` | Turquoise blocks with domed tower | 0.58 | 0.9 |
+| `mangilik-el-arch` | Triumphal arch | 0.42 | 0.62 |
 
 Any other model id is drawn as a modest generic tower, so new data never breaks the scene.
 
