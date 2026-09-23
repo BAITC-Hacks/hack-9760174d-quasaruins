@@ -416,7 +416,9 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
     const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),20000);
     try {
       const resources=await Promise.allSettled([
-        fetch('/api/geography',{signal:controller.signal}).then(response=>{if(!response.ok)throw new Error('Geographic backdrop is unavailable');return response.json();}),
+        // Earlier builds cached this URL for an hour. Always request the current
+        // artifact so a live demo reload receives newly integrated map layers.
+        fetch('/api/geography',{signal:controller.signal,cache:'no-store'}).then(response=>{if(!response.ok)throw new Error('Geographic backdrop is unavailable');return response.json();}),
         import('three'),import('/vendor/OrbitControls.js')
       ]);
       if(resources[0].status==='fulfilled'){geography=resources[0].value;preprocess();onCredit(geography.credit,geography.attributionUrl);}
