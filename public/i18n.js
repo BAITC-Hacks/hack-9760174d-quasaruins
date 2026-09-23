@@ -318,6 +318,10 @@ const ENTRIES = [
   ['The 3D view is unavailable. Use the district controls below; planning and calculations still work.', '3D көрініс қолжетімсіз. Төмендегі аудан батырмаларын қолданыңыз; жоспарлау мен есептеу жұмыс істейді.', '3D-вид недоступен. Используйте кнопки районов ниже; планирование и расчёты работают.'],
   ['The city calculation model could not load. Your browser has not calculated a score. Reload to retry.', 'Қаланы есептеу моделі жүктелмеді. Балл есептелмеді. Бетті қайта жүктеңіз.', 'Модель расчёта не загрузилась. Балл не рассчитан. Перезагрузите страницу.'],
   ['Reload', 'Қайта жүктеу', 'Перезагрузить'],
+  ['Nazarbayev University', 'Назарбаев Университеті', 'Назарбаев Университет'],
+  ['Official Astana district outlines; use district buttons for keyboard selection.', 'Астананың ресми аудан шекаралары; пернетақтамен таңдау үшін аудан батырмаларын қолданыңыз.', 'Официальные границы районов Астаны; для выбора с клавиатуры используйте кнопки районов.'],
+  ['Details', 'Толығырақ', 'Подробнее'],
+  ['Drag to pan · right-drag to orbit · scroll to zoom · choose a district by map or labeled button. All project details are available by tap and keyboard focus.', 'Картаны жылжыту үшін сүйреңіз · айналдыру үшін оң батырмамен сүйреңіз · масштаб — дөңгелекпен · ауданды картадан немесе батырмадан таңдаңыз. Жоба мәліметтері түрту және пернетақта арқылы қолжетімді.', 'Перетаскивайте, чтобы сдвинуть карту · правой кнопкой — вращение · колесо — масштаб · район выбирается на карте или кнопкой. Детали проектов доступны по нажатию и с клавиатуры.'],
   // Card drag and hand (R12)
   ['Placed projects', 'Орналастырылған жобалар', 'Размещённые проекты'],
   ['District details', 'Аудан мәліметтері', 'Детали района'],
@@ -408,6 +412,15 @@ const PATTERNS = [
   [/^(.+) — realized project effects before synergy$/, {
     kk: (m, t) => `${m[1].split('; ').map((part) => part.replace(/^(.+): /, (_, name) => `${t(name)}: `)).join('; ')} — синергияға дейінгі жоба әсерлері`,
     ru: (m, t) => `${m[1].split('; ').map((part) => part.replace(/^(.+): /, (_, name) => `${t(name)}: `)).join('; ')} — эффекты проектов до синергии` }],
+  [/^(.+) ([+\-−][\d.]+) \(base effect\)$/, { kk: (m, t, known) => (known(m[1]) ? `${t(m[1])} ${signed(m[2])} (базалық әсер)` : null), ru: (m, t, known) => (known(m[1]) ? `${t(m[1])} ${signed(m[2])} (базовый эффект)` : null) }],
+  [/^(\d+) units · (.+)$/, { kk: (m, t, known) => (known(m[2]) ? `${m[1]} бірлік · ${t(m[2])}` : null), ru: (m, t, known) => (known(m[2]) ? `${m[1]} ед. · ${t(m[2])}` : null) }],
+  [/^(.+) · (.+) · (\d+) units$/, { kk: (m, t, known) => (known(m[1]) && known(m[2]) ? `${t(m[1])} · ${t(m[2])} · ${m[3]} бірлік` : null), ru: (m, t, known) => (known(m[1]) && known(m[2]) ? `${t(m[1])} · ${t(m[2])} · ${m[3]} ед.` : null) }],
+  // A list of effect chips joined with " · ", e.g. "Road flow +16 · Air quality +4".
+  [/^(.+ [+\-−][\d.]+)( · .+ [+\-−][\d.]+)+$/, {
+    kk: (m, t, known) => { const parts = m[0].split(' · ').map((part) => part.match(/^(.+) ([+\-−][\d.]+)$/)); return parts.every((part) => part && known(part[1])) ? parts.map((part) => `${t(part[1])} ${signed(part[2])}`).join(' · ') : null; },
+    ru: (m, t, known) => { const parts = m[0].split(' · ').map((part) => part.match(/^(.+) ([+\-−][\d.]+)$/)); return parts.every((part) => part && known(part[1])) ? parts.map((part) => `${t(part[1])} ${signed(part[2])}`).join(' · ') : null; } }],
+  // Two known names joined with " · ", e.g. "Dedicated bus lanes · Esil".
+  [/^([^·]+) · ([^·]+)$/, { kk: (m, t, known) => (known(m[1]) && known(m[2]) ? `${t(m[1])} · ${t(m[2])}` : null), ru: (m, t, known) => (known(m[1]) && known(m[2]) ? `${t(m[1])} · ${t(m[2])}` : null) }],
   // Reaction bubbles such as "♥ +10 Schools and childcare".
   [/^(\S+) ([+\-−][\d.]+) (.+)$/, { kk: (m, t, known) => (known(m[3]) ? `${m[1]} ${signed(m[2])} ${t(m[3])}` : null), ru: (m, t, known) => (known(m[3]) ? `${m[1]} ${signed(m[2])} ${t(m[3])}` : null) }],
   [/^(.+) \+$/, { kk: (m, t, known) => (known(m[1]) ? `${t(m[1])} +` : null), ru: (m, t, known) => (known(m[1]) ? `${t(m[1])} +` : null) }],
