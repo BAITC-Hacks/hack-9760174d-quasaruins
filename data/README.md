@@ -29,7 +29,7 @@ metrics are never invented or silently reassigned. Municipal source attributes
 
 ## Recognizable landmarks and parks
 
-`city-details.json` adds fourteen mapped landmark locations, thirteen footprints and three park
+`city-details.json` adds fifteen mapped landmark locations, fourteen footprints and three park
 boundaries, retrieved 23 September 2026. The server combines this small artifact
 with `astana.json` at `/api/geography`. Park rings retain source coordinates.
 Landmark points are outer-ring area centroids of their source footprints, except
@@ -52,6 +52,7 @@ are mapped; the renderer's building heights and forms remain stylized.
 | Hazret Sultan Mosque | [OpenStreetMap way 240860325](https://www.openstreetmap.org/way/240860325) |
 | Kazakh Eli Monument | [OpenStreetMap node 2681623412](https://www.openstreetmap.org/node/2681623412), point only |
 | Astana Grand Mosque | [OpenStreetMap relation 18901938](https://www.openstreetmap.org/relation/18901938), including courtyard hole; identity corroborated by the [Visit Astana map](https://visitastana.kz/en/map/) |
+| Nazarbayev University | Same official building layer, OBJECTID 47194; main connected academic building. Identity: [official campus page](https://nu.edu.kz/visitors/about-campus/) |
 | Botanical Garden | [OpenStreetMap way 1196402246](https://www.openstreetmap.org/way/1196402246) |
 | Central Park / Astana Park | [OpenStreetMap relation 15957444](https://www.openstreetmap.org/relation/15957444) |
 | Presidential Park | [OpenStreetMap way 112177946](https://www.openstreetmap.org/way/112177946) |
@@ -70,6 +71,8 @@ OSM `/api/0.6/way/1196402246/full.json`, `/relation/15957444/full.json` and
 Save the official building layer's GeoJSON query for object IDs
 `132303,129636,2928`, `outSR=4326`, as `official-landmarks.geojson`. Only names,
 object IDs and geometry are used; no property-owner attributes are included.
+
+Save the official building query for OBJECTID 47194 with `outSR=4326`, `outFields=OBJECTID,NAME_OBJECT` and `f=geojson` as `nazarbayev-university-official.geojson`. The university model represents the main academic building, not the full campus.
 
 For the expanded set, save the official query for IDs
 `97655,10190,129644,97783,15492,2927,97804` as
