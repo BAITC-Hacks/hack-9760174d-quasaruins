@@ -23,7 +23,7 @@ function offline(evidence, reason) {
   const text=[
     `This plan spends ${r.cost}/100 and scores ${r.score.toFixed(2)} (${signed(r.delta)} from baseline).`,
     `${strongest.name} gains the most district points (${signed(strongest.delta)}). ${weakest} remains weakest at ${r.minimum.toFixed(2)}.`,
-    `${r.criticalCount} district indicators remain below 40. ${r.synergies.length} synergy bonus${r.synergies.length===1?'':'es'} apply.`,
+    `${r.criticalCount} district indicators remain below 40. ${r.synergies.length} synergy bonus${r.synergies.length===1?' applies':'es apply'}.`,
     negatives.length ? `Trade-off: ${negatives.join('; ')}.` : 'No indicator falls in this model; the trade-off is which needs the fixed budget leaves unmet.',
     s.available ? `A verified single-project change raises the score to ${s.result.score.toFixed(2)} (${signed(s.improvement)}). Review the proposed plan before applying.` : s.reason,
     'These are synthetic scenario outcomes, not forecasts of real residents or finances.',

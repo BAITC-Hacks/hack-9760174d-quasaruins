@@ -5,9 +5,33 @@ Shared modules must not use Node APIs so the same functions run in browser and s
 
 ## Ownership
 
-- codex-A: `shared/**`, `server/**`, `data/**`, `scripts/**`, `public/vendor/**`, `tests/engine.test.mjs`, `tests/server.test.mjs`, configuration/manifests, README, this contract and integration.
-- codex-b: `public/**` except `public/vendor/**`, and `docs/FRONTEND.md`. Complete light 3D frontend. Read the shared STYLE-GUIDE.md before starting.
-- claude: `test/acceptance/**`, `tests/acceptance.test.mjs`, `docs/ACCEPTANCE.md`, `docs/REVIEW.md`. Request corrections to owned source; do not edit others' files without assignment.
+- codex-A: `shared/**`, `server/**`, `data/**`, `scripts/**`, `public/vendor/**`, `tests/engine.test.mjs`, `tests/server.test.mjs`, configuration/manifests, README, this contract and integration. After codex-b hands off the current city-life checkpoint, A owns `public/city.js` for scene integration/construction visuals.
+- codex-b: next checkpoint owns `public/index.html`, `public/styles.css`, `public/app.js`, and `docs/FRONTEND.md` for the full-screen HUD and replay controls. Preserve and commit the already-written city-life changes before transferring scene ownership to A. Read the shared STYLE-GUIDE.md before starting.
+- claude: next checkpoint builds `public/city-details.js` and `docs/CITY-DETAILS.md`. Review files remain `test/acceptance/**`, `tests/acceptance.test.mjs`, `docs/ACCEPTANCE.md`, `docs/REVIEW.md`, but the immediate assignment is building the map-detail module. No edits to other public files.
+
+### Immediate scene integration contract
+
+Claude exports `createCityDetails({THREE,geography,project,groundY=.16})`, returning
+`{group,landmarkAnchors,isReserved,dispose}`. `project([lon,lat])` returns local
+`[eastKm,northKm]`; Three x=east, z=-north. The returned Group includes the four
+mapped landmarks and three park surfaces with sparse trees. No DOM, network,
+global scene or application state mutation. Reuse supplied THREE and cap trees
+to about 90 total. Respect Polygon/MultiPolygon and holes. Landmark vertical
+forms may be exaggerated for the miniature style, while horizontal placement
+follows the supplied footprints. `landmarkAnchors` is
+`[{id,name,position:[x,y,z]}]`; A handles any HTML labels. `isReserved(point,clearance=0)`
+accepts `[eastKm,northKm]` and detects park/landmark interiors or boundary distance
+within `clearance` kilometers, including an enlarged visible landmark base.
+`dispose()` releases the module's own geometries/materials. A wires this module
+into `city.js`; B must not duplicate it.
+
+The existing `city.update` gains optional `replay:{quarter,completedMeasureIds,running,speed}`.
+B owns the replay clock and passes the shared frame's `result` through the
+existing `result` field, with `mode:'after'` during replay. A derives construction
+visuals from replay state; neither renderer nor UI invents intermediate math.
+Clearing replay restores ordinary before/after/A views. Existing callers remain
+valid. `createCity` gains optional `onDistrictHover(idOrNull)`; district clicks
+continue to call `onDistrictSelect(id)`.
 
 Browser imports use `/shared/city-data.js` and `/shared/simulation.js`. Backend serves those exact paths. Backend default port 3000; worker/reviewer may use PORT=3001/3002. Main launch: `node server/main.mjs`. Workers merge the assigned main baseline into their own branch; never reset or rewrite another branch.
 
