@@ -7,7 +7,7 @@ Shared modules must not use Node APIs so the same functions run in browser and s
 
 - codex-A: `shared/**`, `server/**`, `data/**`, `scripts/**`, `public/vendor/**`, `public/assets/projects/**`, `docs/PROJECT-ART.md`, `tests/engine.test.mjs`, `tests/server.test.mjs`, configuration/manifests, README, this contract and integration. R04 geographic data is complete. R10 finishes approved art and combined checks.
 - codex-b: R07 owns `public/app.js`, `public/index.html`, `public/styles.css` and `docs/FRONTEND.md` for the illustrated card deck. After R07 integration acknowledgment, R08 owns `public/city.js` for city spacing, architectural colors and additional baseline services; CSS changes are limited to the matching white background. Preserve all construction/replay/hover behavior. Read the shared STYLE-GUIDE.md before starting.
-- claude: next checkpoint builds `public/city-details.js` and `docs/CITY-DETAILS.md`. Review files remain `test/acceptance/**`, `tests/acceptance.test.mjs`, `docs/ACCEPTANCE.md`, `docs/REVIEW.md`, but the immediate assignment is building the map-detail module. No edits to other public files.
+- claude: finishes R06 map-detail handoff, then R11 owns `public/i18n.js` and `docs/I18N.md` for Kazakh/Russian/English UI switching. A takes `public/city-details.js` and `docs/CITY-DETAILS.md` for R09 materials/reservation checks after the R06 handoff. Review files remain `test/acceptance/**`, `tests/acceptance.test.mjs`, `docs/ACCEPTANCE.md`, `docs/REVIEW.md`.
 
 ### Immediate scene integration contract
 
@@ -88,7 +88,7 @@ DATASET = {
 EXAMPLE_PLAN = [{measureId:'M7',districtId:'nura'}, {measureId:'M8',districtId:'nura'}, {measureId:'M10',districtId:'nura'}, {measureId:'M12',districtId:null}, {measureId:'M5',districtId:'saryarka'}]
 ```
 
-All IDs and canonical field names as above. Additional fields allowed. Extract full original dataset from the supplied Track 12 district PDF. No invented values. Human-facing labels English.
+All IDs and canonical field names as above. Additional fields allowed. Extract full original dataset from the supplied Track 12 district PDF. No invented values. Dataset labels remain canonical English; the UI may translate them without mutating the dataset or IDs.
 
 ## Simulation (`shared/simulation.js`)
 
@@ -155,6 +155,6 @@ Named export `suggestPlan(currentSelections, {lockedMeasureIds=[]}={})` returnin
 - POST /api/advice body {selections,question?,lockedMeasureIds?:string[],language?:'en'|'ru'} -> {mode:'live'|'offline',text,trace:[{tool,input,summary}],suggestion?:suggestPlanOutput,model?:string}; invalid plan HTTP422
 - POST /api/speech body `{text:string}` -> HTTP200 `audio/mpeg` MP3, `X-Audio-Source: AI-generated voice`. Text must contain 1–4000 characters. Send exactly the visible briefing; play only after a user button press and keep that text available as subtitles. Clearly display **AI-generated voice**. Server uses `gpt-4o-mini-tts`, voice `cedar`, 25-second upstream timeout, one active request and a small five-minute memory cache. On HTTP503 (no key/upstream unavailable), HTTP429 or network failure, offer browser speech or text-only viewing; do not block simulation. Errors use `{error:string}`. The key stays server-side and returned upstream errors are sanitized. Stop/revoke old audio when the briefing or plan changes.
 - Server recalculates all evidence; never trusts user-supplied scores. Key only on server. Same-origin local app, request-size limits, no secrets in responses/logs.
-- Adviser output is an English AI-curated verified briefing: the model selects approved fact IDs, and the server renders those statements plus the exact recommendation. `generation:'ai-selected-verified-facts'` is returned for live output. `language` input is reserved for future localization; this version renders English. Show `mode` clearly. Do not add a language switch yet.
+- Adviser output is an English AI-curated verified briefing: the model selects approved fact IDs, and the server renders those statements plus the exact recommendation. `generation:'ai-selected-verified-facts'` is returned for live output. The adviser API `language` input is reserved for future localization; this version renders English. Show `mode` clearly. R11 adds Kazakh/Russian/English UI switching, while clearly retaining the adviser and narration in English; never translate or alter its verified numeric evidence opportunistically.
 - General HTTP failures use {error:string}; frontend must handle timeout/network failure and JSON errors. Invalid simulation HTTP422 retains the normal simulation shape. Escape AI text. Discard stale responses after edits.
 - UI can use the shared deterministic functions immediately when available; HTTP advice/suggest remain server-side. Building points use `indicatorDeltas`/`contributions`, never a second scoring economy. JSON scenario export is frontend-owned and includes selections, datasetVersion, computed result and provenance labels.

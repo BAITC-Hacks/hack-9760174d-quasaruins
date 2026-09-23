@@ -4,7 +4,7 @@
 
 Choose five city projects with a budget of 100. Explore their effects across five modeled districts, compare futures and get an AI-curated briefing grounded in an inspectable simulation.
 
-**Playable checkpoint:** a full-screen light miniature of Astana with a compact HUD, bottom project cards, mapped landmarks and parks, moving cars/pedestrians, and construction replay. Exact results, a timeline chart, pinned Plan A comparison, a grounded AI briefing and optional narration work through the same planning flow.
+**Playable checkpoint:** a full-screen miniature of Astana on a white canvas, with contrasting architectural facades, 60 representative existing service buildings, mapped landmarks and parks, moving cars/pedestrians, and construction replay. Fourteen illustrated project cards form an open scrollable arc; hover or keyboard focus highlights the affected map regions and services. Exact results, a timeline chart, pinned Plan A comparison, a grounded AI briefing and optional narration work through the same planning flow.
 
 ## Run
 
@@ -32,7 +32,7 @@ All calculations, recommendations and map assets work offline. Missing credentia
 4. Switch between **Plan A** and **Your plan** to compare the same city view. **Timeline** shows the illustrative intermediate progression and exact final result.
 5. Click **Explain my plan** in the result window for a live or clearly labeled offline briefing. Its calculation evidence and optional voice controls stay with the displayed text. Voice playback requires a button press and is disclosed as AI-generated, with browser speech/text fallback.
 
-To build your own plan, choose a project card, then click its district or use the labeled district controls; city-wide projects apply to all modeled districts. Hover/focus a card for details. Select a district to focus the camera; **Fit city** shows the entire map. Landmark names stay off the main scene. The planner remains usable if WebGL fails. Open `/?view=2d` to try the compatibility view. [Demo and submission checklist](docs/DEMO.md).
+To build your own plan, choose a project card, then click its district or use the labeled district controls; city-wide projects apply to all modeled districts. Hover/focus a card for details and map highlights. Scroll the deck or use arrow/Home/End keys while a card is focused. Select a district to focus the camera; **Fit city** shows the entire map. Landmark names stay off the main scene. The planner remains usable if WebGL fails. Open `/?view=2d` to try the compatibility view. [Demo and submission checklist](docs/DEMO.md).
 
 ## Rules and exact model
 
@@ -96,6 +96,8 @@ Tests compare dataset fields, baseline and reference plans against an independen
 ## Geography and limits
 
 The official Astana public geoportal provides the district, road and water backdrop. Road and water geometry is simplified for display. The geography API also supplies fourteen landmark positions (including EXPO's Nur Alem), thirteen footprints, three real park boundaries and the mapped LRT route with eighteen stations, with municipal and OpenStreetMap sources attributed separately. Existing LRT is a decorative backdrop independent of intervention M3. Current Astana has six districts; the challenge supplies five synthetic scoring rows. **Sarayshyk is outside this scenario**, without invented metrics or redistributed population shares. Ordinary buildings, project sites and landmark vertical forms are illustrative. Cars, pedestrians and emoji reactions do not represent real behavior predictions.
+
+The renderer expands horizontal map spacing by a factor of two while keeping procedural model sizes readable. All geographic layers use the same projection; source coordinates and district topology are unchanged. This is a cartographic presentation, not a uniformly scaled architectural survey. Existing service locations and empty intervention parcels are illustrative.
 
 Costs are virtual units. This is not financial ROI, a real traffic model, measured happiness or a validated policy forecast. No individual resident data is used. All geographic source links and processing details are in [data/README.md](data/README.md).
 
