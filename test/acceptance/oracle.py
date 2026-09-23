@@ -3,7 +3,8 @@
 
 Written separately from the application engine, in a different language, from
 the organizer's dataset PDF (track 12 / "Датасет районов.pdf"). It generates
-test/acceptance/cases.json, the expected values used by the acceptance tests.
+test/acceptance/cases.json (expected results) and test/acceptance/dataset.json
+(the transcribed dataset), used by tests/acceptance.test.mjs.
 
 Usage:  python3 test/acceptance/oracle.py            # print anchors
         python3 test/acceptance/oracle.py --write    # regenerate cases.json
@@ -106,7 +107,7 @@ def evaluate(plan):
         "cityAverage": avg, "weakestDistrictScore": weakest,
         "weakestDistrict": min(dscore, key=dscore.get),
         "criticalCount": len(crit), "critical": crit,
-        "districtScores": dscore, "synergies": synergies,
+        "districtScores": dscore, "synergies": synergies, "indicators": value,
     }
 
 
@@ -134,7 +135,8 @@ def expected(plan):
             "cityAverage": r5(e["cityAverage"]), "weakestDistrictScore": r5(e["weakestDistrictScore"]),
             "weakestDistrict": e["weakestDistrict"], "criticalCount": e["criticalCount"],
             "critical": e["critical"], "synergies": e["synergies"],
-            "districtScores": {d: r5(v) for d, v in e["districtScores"].items()}}
+            "districtScores": {d: r5(v) for d, v in e["districtScores"].items()},
+            "indicators": {d: {k: r5(v) for k, v in e["indicators"][d].items()} for d in DISTRICTS}}
 
 
 def build_cases():
@@ -197,11 +199,26 @@ def build_cases():
         "reasonCodes": ["COUNT", "BUDGET", "DUPLICATE", "DISTRICT_REQUIRED", "DISTRICT_NOT_ALLOWED", "UNKNOWN_MEASURE", "UNKNOWN_DISTRICT", "DIRECTION_LIMIT", "INCOMPATIBLE"],
         "baseline": {"score": r5(base["score"]), "cityAverage": r5(base["cityAverage"]),
                      "weakestDistrictScore": r5(base["weakestDistrictScore"]), "criticalCount": base["criticalCount"],
-                     "critical": base["critical"], "districtScores": {d: r5(v) for d, v in base["districtScores"].items()}},
+                     "critical": base["critical"], "districtScores": {d: r5(v) for d, v in base["districtScores"].items()},
+                     "indicators": {d: dict(zip(IND, BASE[d])) for d in DISTRICTS}},
         "search": {"validPlanCount": len(scores), "bestScore": r5(best[0]), "bestPlan": best[1],
                    "medianScore": r5(statistics.median(scores)), "worstScore": r5(scores[0]),
                    "publishedExampleBeatsShare": r5(sum(1 for s in scores if s < ex_score) / len(scores))},
         "cases": cases,
+    }
+
+
+def dataset_snapshot():
+    """Independent transcription of the dataset, for field-by-field comparison with the app's data."""
+    return {
+        "budget": BUDGET, "horizon": HORIZON, "weights": WEIGHT,
+        "districts": {d: {"populationShare": POP[d], "indicators": dict(zip(IND, BASE[d]))} for d in DISTRICTS},
+        "measures": {m: {"category": c, "scope": sc, "cost": cost, "lag": lag, "effects": eff}
+                     for m, (c, sc, cost, lag, eff) in MEASURES.items()},
+        "synergies": [{"measures": [a, b], "targetMeasure": a, "effects": {k: 2}} for a, b, k in SYNERGIES],
+        "incompatibilities": [{"measures": ["M1", "M3"], "scope": "any"},
+                              {"measures": ["M4", "M7"], "scope": "same-district"},
+                              {"measures": ["M5", "M13"], "scope": "same-district"}],
     }
 
 
@@ -216,3 +233,6 @@ if __name__ == "__main__":
         out = Path(__file__).with_name("cases.json")
         out.write_text(json.dumps(data, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
         print("wrote", out.name, len(data["cases"]), "cases")
+        ds = Path(__file__).with_name("dataset.json")
+        ds.write_text(json.dumps(dataset_snapshot(), ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+        print("wrote", ds.name)
