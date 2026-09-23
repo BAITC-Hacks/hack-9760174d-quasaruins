@@ -69,4 +69,3 @@ The official Astana public geoportal provides the district, road and water backd
 The renderer expands horizontal map spacing by a factor of two while keeping procedural model sizes readable. All geographic layers use the same projection; source coordinates and district topology are unchanged. This is a cartographic presentation, not a uniformly scaled architectural survey. Existing service locations and empty intervention parcels are illustrative.
 
 Costs are virtual units. This is not financial ROI, a real traffic model, measured happiness or a validated policy forecast. No individual resident data is used. All geographic source links and processing details are in [data/README.md](../data/README.md).
-
