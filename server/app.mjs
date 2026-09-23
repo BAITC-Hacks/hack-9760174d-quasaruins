@@ -6,7 +6,7 @@ import { gzipSync } from 'node:zlib';
 import { DATASET, EXAMPLE_PLAN } from '../shared/city-data.js';
 import { BASELINE, simulatePlan } from '../shared/simulation.js';
 import { suggestPlan, validateLocks } from '../shared/optimizer.js';
-import { getAdvice } from './adviser.mjs';
+import { getAdvice, DEFAULT_ADVISER_MODEL } from './adviser.mjs';
 import { synthesizeSpeech } from './speech.mjs';
 
 export const ROOT=fileURLToPath(new URL('../',import.meta.url));
@@ -32,7 +32,7 @@ async function readJSON(req) {
   return body;
 }
 
-export function createAppServer({root=ROOT,apiKey=process.env.OPENAI_API_KEY,model=process.env.OPENAI_MODEL||'gpt-4.1-mini',adviceFn=getAdvice,speechFn=synthesizeSpeech}={}) {
+export function createAppServer({root=ROOT,apiKey=process.env.OPENAI_API_KEY,model=process.env.OPENAI_MODEL||DEFAULT_ADVISER_MODEL,adviceFn=getAdvice,speechFn=synthesizeSpeech}={}) {
   let activeAdvice=0,activeSpeech=0,geoPromise;
   const adviceCache=new Map(),speechCache=new Map();
   return createServer(async(req,res)=>{

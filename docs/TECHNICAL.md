@@ -29,6 +29,8 @@ Unspent budget earns no bonus. Negative effects are retained. Full precision is 
 
 ## Recommendations and AI
 
+The default adviser uses `gpt-5.4-mini` with `reasoning.effort: low` through the Responses API. Each call allows up to 2,048 output tokens, including reasoning. Both tool calls preserve `store: false`; the follow-up carries forward all response items, including encrypted reasoning. An `OPENAI_MODEL` override remains available; the GPT-5.4 mini alias and dated snapshots receive low reasoning. See the [official model documentation](https://developers.openai.com/api/docs/models/gpt-5.4-mini).
+
 The deterministic optimizer checks every single-slot replacement, including district changes. Locked projects retain both their ID and target. Every candidate is fully validated and rescored, including synergies and critical penalties. Ties use cost and canonical IDs. This is exhaustive **one-change search**, not a claim of global optimality. Recommendations never apply automatically.
 
 The live adviser uses the OpenAI Responses API. It calls `get_scenario_evidence`, receives the current result, verified alternative and fact catalog, then selects relevant strength/risk fact IDs using strict structured output. The server validates the IDs and renders those exact statements plus the precise recommendation. Adverse effects, remaining critical indicators and the weakest district are always disclosed. The model prioritizes evidence; it cannot invent a displayed score, effect, project or target. The trace explains these steps. Briefings are English in this version; questions select relevant facts rather than start a general-purpose chat.

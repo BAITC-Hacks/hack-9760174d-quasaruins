@@ -89,11 +89,13 @@ test('live adviser executes an evidence tool before narrative and preserves tool
     const request=JSON.parse(options.body);requests.push(request);
     assert.equal(url,'https://api.openai.com/v1/responses');assert.equal(request.store,false);
     return {ok:true,json:async()=>requests.length===1?
-      {output:[{type:'function_call',name:'get_scenario_evidence',arguments:'{}',call_id:'proof-123'}]}:
+      {output:[{type:'reasoning',id:'reasoning-123',summary:[],encrypted_content:'opaque-test-context'},{type:'function_call',name:'get_scenario_evidence',arguments:'{}',call_id:'proof-123'}]}:
       {status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify({strengthIds:['gain_nura_S1'],riskIds:['weakest']})}]}]}};
   };
-  const advice=await getAdvice({selections:EXAMPLE_PLAN,lockedMeasureIds:['M7']},{apiKey:'fake-test-only',fetchImpl:fakeFetch});
+  const advice=await getAdvice({selections:EXAMPLE_PLAN,lockedMeasureIds:['M7']},{apiKey:'fake-test-only',model:'gpt-5.4-mini',fetchImpl:fakeFetch});
   assert.equal(advice.mode,'live');assert.equal(requests.length,2);
+  for(const request of requests){assert.equal(request.model,'gpt-5.4-mini');assert.deepEqual(request.reasoning,{effort:'low'});assert.equal(request.max_output_tokens,2048);}
+  assert.equal(requests[1].input.find(item=>item.type==='reasoning').encrypted_content,'opaque-test-context');
   assert.match(advice.text,/schools and childcare rises by 10\.00/);
   assert.match(advice.text,/replace Clean household fuel \(Saryarka\) with Light rail expansion \(Nura\)/);
   assert.equal(requests[1].text.format.type,'json_schema');

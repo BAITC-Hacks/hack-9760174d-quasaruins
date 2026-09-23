@@ -24,15 +24,17 @@ Our aim is to make participation feel approachable. You can experiment, see the 
 
 ## Run locally
 
-Requires **Node.js 22+**. No install or build step is needed.
+Requires **Git and Node.js 22+**. Clone the team repository, then start the server. No package install or build step is needed.
 
 ```sh
+git clone https://github.com/BAITC-Hacks/hack-9760174d-quasaruins.git
+cd hack-9760174d-quasaruins
 node server/main.mjs
 ```
 
-Open **http://localhost:3000**. `npm start` also works. To use another port, run `PORT=3001 node server/main.mjs`.
+Open **http://localhost:3000**. `npm start` also works. To use another port, run `PORT=3001 node server/main.mjs`. There is no hosted demo URL; this version runs locally.
 
-The simulation and map work offline. For the live AI adviser, copy `.env.example` to `.env` and add your `OPENAI_API_KEY`. The default model is `gpt-4.1-mini`. Keep the key out of Git and browser code. Without an available AI service, the app shows a clearly labeled explanation based on the same calculations.
+The simulation and map work offline. For the live AI adviser, copy `.env.example` to `.env` and add your `OPENAI_API_KEY`. The default model is `gpt-5.4-mini` with low reasoning effort. Keep the key out of Git and browser code. Without an available AI service, the app shows a clearly labeled explanation based on the same calculations.
 
 ## How to play
 
@@ -42,7 +44,7 @@ The simulation and map work offline. For the live AI adviser, copy `.env.example
 4. **Compare the result.** Check the score and weakest district. Pin a result as **Plan A**, change your choices, and compare.
 5. **Explore an improvement.** Ask for a verified project swap or an AI explanation of the benefits and trade-offs.
 
-For a quick demo, click **Example → Start**. The supplied plan costs **95**, scores **56.54**, and leaves **zero critical indicators**.
+For a quick test, click **Example → Start**. Expect cost **95**, an **Astana Quality of Life Score of 56.54**, and **zero critical indicators**. Choose **Find one improvement → Apply verified change** to reproduce cost **100** and score **57.21**. Try adding a sixth project to see a rejected choice with an explanation.
 
 Drag the map to pan, right-drag to rotate, and scroll to zoom. **Fit city** resets the view. Click and keyboard controls are also available. The language button cycles **Kazakh, Russian and English**; AI briefings and narration are English in this version.
 
@@ -67,7 +69,16 @@ Astana's real geography is the backdrop. The challenge supplies **five synthetic
 
 ## Technical details
 
-Built with **Node.js, plain JavaScript and Three.js**, with the OpenAI Responses API for the optional adviser. Map data and Three.js are included locally.
+Built with **Node.js, JavaScript, HTML/CSS and Three.js**, with the OpenAI Responses API for the optional adviser. Optional narration uses OpenAI's `gpt-4o-mini-tts` model, with browser speech as a fallback. Map data and Three.js are included locally.
+
+The main components are:
+
+- `public/`: cards, controls, translations and the 3D city.
+- `shared/`: the dataset, scoring rules and single-project improvement search.
+- `server/`: HTTP endpoints, validation, AI evidence and narration.
+- `data/`: cached map geometry; `tests/` and `test/acceptance/`: automated checks.
+
+The browser sends a plan to the server. The shared model validates and scores it. The adviser receives those verified results, and the browser shows the city changes and final report.
 
 ```sh
 node --test
@@ -76,11 +87,22 @@ python3 test/acceptance/oracle.py
 
 The automated checks cover the official calculation, invalid plans, recommendations, HTTP endpoints and AI boundaries. An independent Python implementation checks the reference results.
 
+## Data and limitations
+
+The scoring data comes from the organizer's Track 12 **“Датасет районов”** and is stored in `shared/city-data.js`. Map geometry comes from Astana's public geoportal and OpenStreetMap, with source links in [data/README.md](data/README.md). The only live external service is OpenAI for optional advice and narration; maps do not require a live map API.
+
+Plans are saved in the current browser. Shared accounts, cross-team leaderboards, unexpected city events and automatic slide generation are not implemented. The map is illustrative, the scoring data is synthetic, and AI explanations and narration are currently English-only.
+
+Possible next steps are community proposal comparison, uncertainty ranges for project effects, and testing the interface with residents. These are future ideas, not current features.
+
+## More detail
+
 - [Model, AI and architecture](docs/TECHNICAL.md)
 - [Short demo guide](docs/DEMO.md)
 - [Map sources and limitations](data/README.md)
 - [Project artwork and prompts](docs/PROJECT-ART.md)
 - [Interface contract](docs/CONTRACT.md)
+- [Organizer README checklist](docs/README-CHECKLIST.md)
 
 ## Participant and AI tools
 
