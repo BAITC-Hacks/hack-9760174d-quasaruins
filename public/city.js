@@ -1,7 +1,7 @@
 /** Geographic presentation only. All policy effects and scores come from the shared evaluator. */
-import { createCityDetails } from './city-details.js?v=20260923-r13';
+import { createCityDetails } from './city-details.js?v=20260923-final1220';
 import { makeTrack, sampleTrack } from './city-motion.js';
-import { createProjectEffects } from './city-project-effects.js?v=20260923-r14';
+import { createProjectEffects } from './city-project-effects.js?v=20260923-final1220';
 import { BASELINE } from '../shared/simulation.js';
 // One shared horizontal scale keeps every geographic layer aligned. Model sizes
 // and parcel clearances remain world-space dimensions, rather than doubling.
@@ -57,7 +57,7 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
   let props = { selections: [], result: null, districtId: 'nura', mode: 'draft', paused: false };
   let signature = '', ready3d = false, disposed = false, frame, resizeObserver, focusTween, home, animationStart = 0, upgrades = [];
   let ambient = [], motionTime = 0, previousFrame = 0, ambientMeshes, reactions = [], lastReactedPlan = '', previousAppliedKeys = new Set();
-  let focusedProject = null, projectFocusLabel, hoveredDistrictId = null, hoverLabel, cityDetails = null, landmarkLabels = [], projectEffects = null, fitZoom = null;
+  let focusedProject = null, projectFocusLabel, hoveredDistrictId = null, hoverLabel, cityDetails = null, landmarkLabels = [], projectEffects = null, fitZoom = null, lastViewport = '';
   let reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const materials = new Map(), geometries = new Map(), projectSites = new Map(), serviceSites = new Map(), baselineServices = [], neighborhoodServices = [], architecture = [];
   let serviceSignature = '';
@@ -586,6 +586,7 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
   function resize() {
     if (!renderer || !home) return;
     const width = Math.max(1,canvasHost.clientWidth), height = Math.max(1,canvasHost.clientHeight), aspect = width/height;
+    const viewportKey=`${width}:${height}`;if(lastViewport===viewportKey)return;lastViewport=viewportKey;
     const half = Math.max(home.planHeight * .60, home.planWidth / aspect * .57);
     camera.left = -half * aspect; camera.right = half * aspect; camera.top = half; camera.bottom = -half;
     const top=width<761?112:92,bottom=width<761?(height<690?350:382):342;
@@ -593,7 +594,7 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
     camera.setViewOffset(width,height,0,(bottom-top)/2,width,height);
     const wasFitted=fitZoom!==null&&Math.abs(camera.zoom-fitZoom)<fitZoom*.04;
     const fit=fittedView();fitZoom=fit.zoom;controls.minZoom=fitZoom*.98;
-    if(wasFitted)moveCamera(fit.target,fit.zoom,true);else{camera.zoom=Math.max(camera.zoom,controls.minZoom);camera.updateProjectionMatrix();}
+    if(wasFitted&&!focusTween)moveCamera(fit.target,fit.zoom,true);else{camera.zoom=Math.max(camera.zoom,controls.minZoom);camera.updateProjectionMatrix();}
     renderer.setSize(width,height,false); placeLabels();
   }
   function moveCamera(target, zoom, immediate = false) {

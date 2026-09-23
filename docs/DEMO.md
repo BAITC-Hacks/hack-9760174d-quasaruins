@@ -3,11 +3,11 @@
 ## 60–90 second demonstration
 
 1. Open Akim Lab. Explain: one human participant, five decisions, 100 virtual budget units, fixed organizer model.
-2. Click **Example**, then **Start** and **4×**. Point out scaffolding, completion by project delay and the mapped Astana landmarks. At quarter 8, show cost95, score56.54, zero critical indicators, and Nura’s schools/clinic/safety upgrades. Intermediate quarters, buildings and reactions illustrate district effects; they are not forecasts.
+2. Click **Example**, then **Start** and **4×**. Point out project-specific construction, completion icons, the mapped Astana landmarks and actual road treatments. At quarter 8, show cost95, score56.54, zero critical indicators, and Nura’s schools/clinic/safety upgrades. Intermediate quarters, buildings and reactions illustrate district effects; they are not forecasts.
 3. Click **Pin as Plan A**. Close the result window, open **Project slots**, and lock **School and kindergarten** using **Keep in advice**. Return to **Statistics**.
 4. Click **Find one improvement**. The verified alternative swaps M5 Clean household fuel in Saryarka for M3 Light rail in Nura. Score57.20556, displayed57.21; cost100. M7 stays in Nura.
 5. Click **Apply verified change**. Switch **Plan A** / **Your plan** with the same camera. The exact score must match the recommendation preview. Explain the trade-off: Saryarka gives up8.75 air-quality and2.50 utility-reliability points relative to Plan A.
-6. Click **Explain my plan** and open **View calculation evidence**. Point out live versus offline mode. AI selects relevant verified evidence; the engine calculates and validates every result. Optional narration reads the displayed briefing with an AI-generated-voice disclosure; do not rely on audio being available at the venue.
+6. Click **Explain my plan**, then open **View calculation evidence** inside **Briefing details**. Point out live versus offline mode. AI selects relevant verified evidence; the engine calculates and validates every result. Optional narration reads the displayed briefing with an AI-generated-voice disclosure; do not rely on audio being available at the venue.
 7. Close on the weakest district, remaining risks, the reproducible repository and honest geographic/model limits.
 
 If live AI is unavailable, retain the clearly labeled offline explanation. Do not represent it as a successful model call. Do not claim a global optimum: the interactive search guarantees only the best single-project change under the chosen locks.
@@ -25,3 +25,9 @@ If live AI is unavailable, retain the clearly labeled offline explanation. Do no
 - Reserve the last15minutes for platform submission rather than adding features.
 
 The organizer deadline is authoritative. The shared coordination deadline is only a planning estimate. The reported hourly-push disqualification rule has not been independently verified; meaningful checkpoints are pushed every30–45minutes while actively building.
+
+## Direct manipulation
+
+Drag an available card onto a district. A compact image remains at that district centre; citywide cards sit above the city centre. Hover follows the cursor, and the affected map region highlights. Drop an incompatible or unaffordable card to show the exact rule and return animation. Drag a placed card back to the hand to remove it. Each district can contain more than two projects; the official cap is two per category.
+
+Drag the map to pan, right-drag to rotate, scroll to zoom, and use Fit city to reset. Ordinary buildings have plain facades; named landmarks use mapped positions. Sarayshyk has visible services but no invented scenario metrics. Result sections expand only when requested. KZ/RU/EN switching is one HUD button; verified briefings and voice remain English.
