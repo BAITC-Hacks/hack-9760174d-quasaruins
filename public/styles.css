@@ -84,3 +84,5 @@ html,body{height:100%;margin:0;overflow:hidden}body{font-size:14px}button,select
 @media(prefers-reduced-motion:reduce){.project-tile{transition:none}.project-tile:hover,.project-tile:focus-visible{transform:translateY(var(--card-drop,0px)) rotate(var(--card-angle,0deg))}.loading-orbit{animation:none}}
 .project-list.fits{justify-content:center}
 @media(max-width:760px){.deck-foot>span:last-child{display:inline}}
+/* R08: white canvas meets the geographic ground without a tinted frame. */
+:root{--canvas:#ffffff}.city-stage{background:#ffffff}
