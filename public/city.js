@@ -1,7 +1,19 @@
 /** Geographic presentation only. All policy effects and scores come from the shared evaluator. */
 import { createCityDetails } from './city-details.js';
 import { makeTrack, sampleTrack } from './city-motion.js';
+import { BASELINE } from '../shared/simulation.js';
 const COLORS = { land: 0xe7ebdd, side: 0xd5deca, outside: 0xe3e5dc, water: 0x82cddd, road: 0xc3cabb, building: 0xf3e9d9, roof: 0xe1d8c9, glass: 0xb8d6d7, green: 0x4b9562, mint: 0xe8f3ed, transport: 0x238a9a, social: 0x8a73b8, safety: 0xb37a25, services: 0x587ea0 };
+const SERVICE_TYPES = [
+  {id:'school',name:'School',indicator:'S1',color:0x8a73b8},
+  {id:'clinic',name:'Clinic',indicator:'S2',color:0x8a73b8},
+  {id:'safety',name:'Safety post',indicator:'B1',color:0xb37a25},
+  {id:'utilities',name:'Utilities',indicator:'C1',color:0x587ea0},
+  {id:'civic',name:'Service centre',indicator:'C2',color:0x587ea0},
+  {id:'transit',name:'Transit stop',indicator:'T2',color:0x238a9a},
+];
+const PROJECT_SERVICE = {M1:'transit',M2:'transit',M3:'transit',M5:'utilities',M7:'school',M8:'clinic',M10:'safety',M11:'safety',M12:'civic',M13:'utilities',M14:'utilities'};
+const SERVICE_SCALE = .75;
+const COMPACT_PROJECTS = new Set(['M4','M6','M9']);
 const MODES = new Set(['draft', 'before', 'after', 'a']);
 const hash = (text) => [...String(text)].reduce((value, char) => ((value * 31 + char.charCodeAt(0)) >>> 0), 7);
 function rng(seed) { let value = seed >>> 0; return () => { value = (Math.imul(value, 1664525) + 1013904223) >>> 0; return value / 4294967296; }; }
@@ -13,6 +25,8 @@ function insideRing(point, ring) {
   }
   return inside;
 }
+function segmentDistanceSquared(point,a,b) { const dx=b[0]-a[0],dy=b[1]-a[1],length=dx*dx+dy*dy,t=length?Math.max(0,Math.min(1,((point[0]-a[0])*dx+(point[1]-a[1])*dy)/length)):0;return (point[0]-a[0]-t*dx)**2+(point[1]-a[1]-t*dy)**2; }
+function nearRing(point,ring,radiusSquared) { return ring.some((a,i)=>segmentDistanceSquared(point,a,ring[(i+1)%ring.length])<radiusSquared); }
 function insidePolygons(point, polygons) { return polygons.some((rings) => insideRing(point, rings[0]) && !rings.slice(1).some((hole) => insideRing(point, hole))); }
 function polygonCoordinates(geometry) { return geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.type === 'MultiPolygon' ? geometry.coordinates : []; }
 function lineCoordinates(geometry) { return geometry.type === 'LineString' ? [geometry.coordinates] : geometry.type === 'MultiLineString' ? geometry.coordinates : []; }
@@ -36,7 +50,9 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
   let ambient = [], motionTime = 0, previousFrame = 0, ambientMeshes, reactions = [], lastReactedPlan = '', previousAppliedKeys = new Set();
   let focusedProject = null, projectFocusLabel, hoveredDistrictId = null, hoverLabel, cityDetails = null, landmarkLabels = [];
   let reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const materials = new Map(), geometries = new Map(), projectSites = new Map();
+  const materials = new Map(), geometries = new Map(), projectSites = new Map(), serviceSites = new Map(), baselineServices = [];
+  let serviceSignature = '';
+  let projectHighlight = null, highlightRings = [];
   const geometry = (id, factory) => { if (!geometries.has(id)) geometries.set(id, factory()); return geometries.get(id); };
   const material = (color, opacity = 1) => {
     const id = `${color}:${opacity}`;
@@ -44,8 +60,15 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
     return materials.get(id);
   };
   const landAt = (point, district) => insidePolygons(point, district.polygons) && !waterAreas.some((area) => point[0] >= area.minX && point[0] <= area.maxX && point[1] >= area.minY && point[1] <= area.maxY && insidePolygons(point, [area.rings]));
-  const buildableAt = (point, district, clearance = .34) => landAt(point, district) && !cityDetails?.isReserved(point, clearance)
-    && [[-1,-1],[1,-1],[1,1],[-1,1]].every(([x,y])=>landAt([point[0]+x*clearance,point[1]+y*clearance],district));
+  const buildableAt = (point, district, clearance = .24) => {
+    // Checking only square corners misses narrow waterways through a parcel.
+    // Keep its entire circumscribed footprint clear of every mapped boundary.
+    const radius=clearance*Math.SQRT2,radiusSquared=radius*radius;
+    if(!landAt(point,district)||cityDetails?.isReserved(point,radius))return false;
+    const polygon=district.polygons.find(rings=>insideRing(point,rings[0])&&!rings.slice(1).some(ring=>insideRing(point,ring)));
+    if(!polygon||polygon.some(ring=>nearRing(point,ring,radiusSquared)))return false;
+    return !waterAreas.some(area=>point[0]>=area.minX-radius&&point[0]<=area.maxX+radius&&point[1]>=area.minY-radius&&point[1]<=area.maxY+radius&&area.rings.some(ring=>nearRing(point,ring,radiusSquared)));
+  };
 
   function meshBox(parent, x, y, z, width, height, depth, color, opacity = 1) {
     const mesh = new THREE.Mesh(geometry('box', () => new THREE.BoxGeometry(1, 1, 1)), material(color, opacity));
@@ -139,6 +162,7 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
     const ambient = new THREE.HemisphereLight(0xffffff, 0xa6b696, 2.3); scene.add(ambient);
     const sun = new THREE.DirectionalLight(0xfff7e7, 2.8); sun.position.set(center.x - 20, 45, center.z + 16); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.camera.left = -size.x; sun.shadow.camera.right = size.x; sun.shadow.camera.top = size.z; sun.shadow.camera.bottom = -size.z; sun.shadow.camera.far = 100; sun.shadow.bias = -.0003; sun.shadow.normalBias = .04; scene.add(sun); sun.target.position.copy(center); scene.add(sun.target);
     home = { center, span: Math.max(size.x, size.z) * .96, planWidth: (size.x + size.z) * Math.SQRT1_2, planHeight: (size.x + size.z) * .5 + 2 };
+    buildBaselineServices();
     const buildingData = [], treeData = [];
     for (const district of districtRecords.filter((district) => district.modeled)) {
       const random = rng(hash(`${district.id}-architecture`));
@@ -146,12 +170,12 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
       for (let i = 0; i < 95; i += 1) {
         const base = candidates[Math.floor(random() * candidates.length)];
         const point = [base[0] + (random() - .5) * .55, base[1] + (random() - .5) * .55];
-        if (!buildableAt(point, district) || district.buildings.some((other) => Math.hypot(other[0] - point[0], other[1] - point[1]) < .35)) continue;
+        if (!buildableAt(point, district) || [...projectSites.values()].some(site=>Math.hypot(site[0]-point[0],site[1]-point[1])<1.2) || district.buildings.some((other) => Math.hypot(other[0] - point[0], other[1] - point[1]) < .35)) continue;
         district.buildings.push(point);
         // Procedural filler must not hide the real landmarks behind tall blocks.
         const nearLandmark=cityDetails?.landmarkAnchors.some(anchor=>Math.hypot(point[0]-anchor.position[0],point[1]+anchor.position[2])<1.25);
         buildingData.push({ x: point[0], z: -point[1], width: .18 + random() * .22, depth: .18 + random() * .3, height: nearLandmark?.18+random()*.2:.3+random()**2*1.25 });
-        if (i % 2 === 0) { const green = [point[0] + .3, point[1] + .2]; if (buildableAt(green, district,.2)) treeData.push([green[0], -green[1]]); }
+        if (i % 2 === 0) { const green = [point[0] + .3, point[1] + .2]; if (buildableAt(green, district,.2) && ![...projectSites.values()].some(site=>Math.hypot(site[0]-green[0],site[1]-green[1])<1.2)) treeData.push([green[0], -green[1]]); }
       }
     }
     const boxes = new THREE.InstancedMesh(geometry('box', () => new THREE.BoxGeometry(1, 1, 1)), material(COLORS.building), buildingData.length);
@@ -198,9 +222,12 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
     Object.values(ambientMeshes).forEach(mesh=>{mesh.instanceMatrix.needsUpdate=true;});
   }
   function projectSite(district, measureId) {
+    const serviceId=PROJECT_SERVICE[measureId];
+    if(serviceId)return serviceSites.get(`${district.id}:${serviceId}`)??null;
     const key=`${district.id}:${measureId}`;
     if(projectSites.has(key))return projectSites.get(key);
-    const available=point=>buildableAt(point,district,.95)&&![...projectSites].some(([id,other])=>id.startsWith(district.id+':')&&Math.hypot(other[0]-point[0],other[1]-point[1])<2);
+    const compact=COMPACT_PROJECTS.has(measureId),clearance=compact?.45:.68;
+    const available=point=>buildableAt(point,district,clearance)&&![...projectSites].some(([id,other])=>id.startsWith(district.id+':')&&Math.abs(other[0]-point[0])<(compact?1.25:1.6)&&Math.abs(other[1]-point[1])<(compact?1.1:1.4));
     const reserve=point=>{if(point)projectSites.set(key,point);return point;};
     const random = rng(hash(`${district.id}:${measureId}`));
     const options = district.candidates.filter((p) => Math.hypot(p[0] - district.anchor[0], p[1] - district.anchor[1]) < 4);
@@ -210,7 +237,100 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
       if (available(candidate)) return reserve(candidate);
     }
     // Never fall back to a site known to overlap a park, landmark or water.
-    return reserve(district.candidates.find(available) ?? null);
+    const nearRoad=district.candidates.find(available);
+    if(nearRoad)return reserve(nearRoad);
+    // Sparse road samples must not erase a district's existing services. Search
+    // deterministic land candidates, still respecting every exclusion layer.
+    for(let i=0;i<1200;i++){const point=[district.bounds.minX+random()*(district.bounds.maxX-district.bounds.minX),district.bounds.minY+random()*(district.bounds.maxY-district.bounds.minY)];if(available(point))return reserve(point);}
+    return null;
+  }
+  function baselineShape(group, type) {
+    const box=(x,z,w,h,d,color=COLORS.building,y=.17)=>meshBox(group,x,y,z,w,h,d,color);
+    const pole=(x,z,h,color=COLORS.roof)=>cylinder(group,x,.17,z,.025,h,color);
+    // These small parcels represent services, not surveyed individual buildings.
+    box(0,0,1.85,.025,1.35,0xe9e6d8,.16);
+    box(0,.59,1.85,.025,.16,0xd3d9cc,.19);
+    const building=(color,height=.55)=>{
+      box(-.4,-.1,.68,height,.55);box(-.4,-.1,.73,.065,.59,color,.17+height);
+      box(-.4,.18,.46,.16,.022,COLORS.glass,.39);box(-.4,.21,.13,.25,.035,0xa6b9ac);
+    };
+    switch(type){
+      case 'school':
+        building(0xc0b2cd,.57);box(-.8,-.15,.15,.3,.45,0xe4d8c3);box(.25,.12,.43,.02,.4,0xc7d2b7,.20);
+        pole(-.8,.3,.78);box(-.69,.3,.22,.13,.02,COLORS.social,.78);
+        for(const x of [-.63,-.38,-.13])box(x,-.385,.12,.15,.02,COLORS.glass,.39);break;
+      case 'clinic':
+        building(0xbbcbd0,.64);box(-.4,.2,.25,.07,.03,0x7c9e9b,.61);box(-.4,.2,.07,.25,.033,0x7c9e9b,.52);
+        box(-.4,.32,.54,.04,.25,COLORS.roof,.42);box(.27,-.18,.34,.22,.43,0xdadfd4);break;
+      case 'safety':
+        building(0xcbbf9c,.37);pole(.3,.05,.75);box(.38,.05,.23,.045,.11,0xc6cba9,.9);
+        box(-.35,.52,.38,.02,.22,0xe4d9b8,.22);break;
+      case 'utilities':
+        building(0xb4c2bd,.47);cylinder(group,.19,.18,-.24,.18,.4,0xc4cec6);cylinder(group,.63,.18,-.24,.18,.4,0xc4cec6);
+        box(.4,-.24,.62,.06,.1,0x829b9c,.61);box(-.64,-.22,.12,.64,.12,0xb2ada0);break;
+      case 'civic':
+        building(0xb8c7c9,.57);box(-.4,.3,.8,.06,.34,0xc9cfba,.64);
+        for(const x of [-.73,-.08])pole(x,.4,.47,0xc2c6b5);
+        box(.28,.13,.42,.045,.16,0xb7b3a1,.31);break;
+      case 'transit':
+        box(-.42,-.12,.86,.045,.44,0xa9c5c1,.76);pole(-.75,-.1,.58);pole(-.09,-.1,.58);
+        box(-.4,-.29,.69,.43,.03,COLORS.glass,.29);box(-.42,-.06,.52,.065,.14,0xb4b5a5,.34);
+        pole(-.82,.3,.78);box(-.82,.3,.17,.15,.04,0x709c96,.81);break;
+    }
+  }
+  function buildBaselineServices() {
+    for(const district of districtRecords.filter(item=>item.modeled)){
+      for(const type of SERVICE_TYPES){
+        const site=projectSite(district,`existing-${type.id}`);if(!site){console.warn(`No safe service parcel: ${district.id}/${type.id}`);continue;}
+        serviceSites.set(`${district.id}:${type.id}`,site);
+        const group=new THREE.Group();group.name=`Existing ${type.name} · ${district.name}`;group.position.set(site[0],.16*(1-SERVICE_SCALE),-site[1]);group.scale.setScalar(SERVICE_SCALE);
+        group.userData={districtId:district.id,serviceId:type.id,illustrative:true,baseline:true};baselineShape(group,type.id);scene.add(group);
+        const label=document.createElement('button');label.type='button';label.className='district-map-label service-map-label';label.dataset.service=type.id;label.dataset.district=district.id;label.style.background='#f8f8eff2';label.style.borderColor='#bfccc0';label.style.fontSize='10px';
+        label.addEventListener('click',()=>{onDistrictSelect(district.id);moveCamera(group.position,5.5);});labelsHost.append(label);
+        baselineServices.push({group,site,district,type,label});
+      }
+      // Allocate standalone parks/greening deterministically before filler blocks.
+      // Every plan then reuses the same parcels rather than moving existing sites.
+      for(const id of ['M4','M6','M9'])projectSite(district,id);
+    }
+    updateServiceLabels();
+  }
+  function updateServiceLabels() {
+    const completed=new Set(props.replay?.completedMeasureIds??[]);
+    const signature=JSON.stringify([props.mode,props.replay?.quarter,props.selections,props.result?.districts?.map(d=>d.indicators)]);
+    if(signature===serviceSignature)return;serviceSignature=signature;
+    for(const service of baselineServices){
+      const {type,district,label}=service;
+      const projects=props.mode==='before'?[]:props.selections.filter(item=>PROJECT_SERVICE[item.measureId]===type.id&&(item.districtId===null||item.districtId===district.id));
+      const applied=props.mode!=='draft'&&projects.some(item=>!props.replay||completed.has(item.measureId));
+      const current=(props.result?.districts??BASELINE.districts).find(item=>item.id===district.id)?.indicators[type.indicator];
+      const base=BASELINE.districts.find(item=>item.id===district.id)?.indicators[type.indicator];
+      label.textContent=`${type.name}${applied?' +':''}`;
+      label.title=`${district.name} · representative existing ${type.name.toLowerCase()}, illustrative location. ${props.indicatorNames?.[type.indicator]??type.indicator}: ${Number(current?.toFixed(2))}${current!==base?` (baseline ${base})`:''}. ${applied?'Project addition completed.':projects.length?'Project planned or under construction; existing service remains.':'Existing service at baseline.'}`;
+      label.setAttribute('aria-label',`${type.name} in ${district.name}${applied?', project upgraded':', existing service'}`);
+      label.style.borderColor=applied?'#78a981':'#bfccc0';label.style.background=applied?'#edf7e8f5':'#f8f8eff2';
+    }
+  }
+  function serviceUpgradeShape(group, measureId, opacity) {
+    if(!PROJECT_SERVICE[measureId]){projectShape(group,measureId,opacity);return;}
+    const box=(x,z,w,h,d,color=COLORS.mint,y=.19)=>meshBox(group,x,y,z,w,h,d,color,opacity);
+    const pole=(x,z,h,color=COLORS.roof)=>cylinder(group,x,.18,z,.025,h,color,opacity);
+    const line=(points,color)=>lines(group,points.map(p=>new THREE.Vector3(...p)),color,opacity);
+    const wing=(accent=COLORS.glass,height=.65)=>{box(.42,.02,.65,height,.66);box(.42,.02,.7,.075,.7,accent,.19+height);box(.42,.357,.44,.2,.025,COLORS.glass,.44);};
+    switch(measureId){
+      case 'M7': wing(COLORS.social,.78);box(.44,-.15,.42,.03,.29,COLORS.green,1.045);box(.39,.48,.52,.035,.15,0xb9d8a8);break;
+      case 'M8': wing(COLORS.social,.7);box(.42,.37,.26,.07,.035,COLORS.social,.69);box(.42,.37,.07,.26,.035,COLORS.social,.6);break;
+      case 'M5':box(-.41,-.1,.58,.055,.4,COLORS.green,.77);box(.49,.23,.45,.46,.45);box(.49,.23,.47,.065,.47,COLORS.green,.65);break;
+      case 'M13':wing(COLORS.services,.46);line([[-.8,.24,.46],[.72,.24,.46],[.72,.24,-.5]],COLORS.services);box(.42,.05,.37,.21,.34,COLORS.glass,.72);break;
+      case 'M12':wing(COLORS.services,.7);pole(.7,-.22,1.1,COLORS.services);line([[.58,1.19,-.22],[.69,1.09,-.22],[.88,1.36,-.22]],COLORS.green);break;
+      case 'M14':{const van=new THREE.Group();van.position.set(.42,0,.58);van.scale.setScalar(.74);projectShape(van,'M14',opacity);group.add(van);break;}
+      case 'M9':{const court=new THREE.Group();court.position.set(.46,.05,.1);court.scale.setScalar(.66);projectShape(court,'M9',opacity);group.add(court);break;}
+      case 'M10':for(const x of [.22,.75]){pole(x,-.38,.96,COLORS.safety);box(x+.04,-.38,.2,.045,.08,0xe7c66a,1.12);box(x,-.33,.12,.075,.11,COLORS.safety,.91);}break;
+      case 'M11':box(.3,.48,1.22,.025,.26,COLORS.road);for(let x=-.15;x<.9;x+=.2)box(x,.48,.08,.018,.23,0xfffff5,.23);box(.7,.22,.26,.08,.14,COLORS.safety);break;
+      case 'M1':box(0,.62,1.8,.025,.22,COLORS.transport);wing(COLORS.transport,.28);box(.32,.62,.42,.18,.16,COLORS.mint,.24);break;
+      case 'M2':for(const x of [.35,.8]){pole(x,.48,.86);box(x,.48,.1,.23,.09,COLORS.transport,.88);box(x,.533,.05,.05,.018,COLORS.green,.97);}break;
+      case 'M3':box(0,.65,1.85,.075,.32,COLORS.glass,.5);for(const x of [-.72,.72])pole(x,.65,.35,COLORS.services);line([[-.92,.6,.57],[.92,.6,.57]],COLORS.transport);line([[-.92,.6,.74],[.92,.6,.74]],COLORS.transport);box(.24,.65,.64,.2,.2,COLORS.mint,.6);box(.24,.65,.58,.05,.22,COLORS.transport,.8);break;
+    }
   }
   function constructionShape(group) {
     meshBox(group,0,.17,0,1.25,.045,.9,0xded8c4);
@@ -266,7 +386,7 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
     if (next === signature) return;
     const prior = new Map(upgrades.map(group=>[`${group.userData.measureId}:${group.userData.districtId}`,group.userData.constructing]));
     signature = next; clearUpgrades();
-    if (props.mode === 'before') return;
+    if (props.mode === 'before') { updateServiceLabels(); return; }
     const opacity = props.mode === 'draft' ? .43 : 1;
     for (const selection of [...props.selections].sort((a,b)=>Number(a.measureId.slice(1))-Number(b.measureId.slice(1)))) {
       const targets = districtRecords.filter((district) => district.modeled && (selection.districtId === null || selection.districtId === district.id));
@@ -275,10 +395,11 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
         if(!site)continue;
         const constructing=Boolean(replay&&!completed.has(selection.measureId));
         const justCompleted=prior.get(`${selection.measureId}:${district.id}`)===true&&!constructing;
-        group.position.set(site[0], 0, -site[1]);
-        group.scale.setScalar(.75);
-        group.userData = { districtId: district.id, measureId: selection.measureId, constructing, animate:justCompleted||(!replay&&props.mode==='after'), reveal:props.paused||reducedMotion?1:0 };
-        if(constructing)constructionShape(group);else projectShape(group, selection.measureId, opacity);
+        const projectScale=COMPACT_PROJECTS.has(selection.measureId)?.42:SERVICE_SCALE;
+        group.position.set(site[0], .16*(1-projectScale), -site[1]);
+        group.scale.setScalar(projectScale);
+        group.userData = { districtId: district.id, measureId: selection.measureId, constructing, scale:projectScale, animate:justCompleted||(!replay&&props.mode==='after'), reveal:props.paused||reducedMotion?1:0 };
+        if(constructing){const extension=new THREE.Group();if(PROJECT_SERVICE[selection.measureId]){extension.position.set(.43,.055,.07);extension.scale.setScalar(.58);}constructionShape(extension);group.add(extension);}else serviceUpgradeShape(group, selection.measureId, opacity);
         if(justCompleted&&!reducedMotion&&!props.paused) {
           const dust=new THREE.Group(),dustMaterial=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.7,depthWrite:false});
           for(let i=0;i<5;i++){const puff=new THREE.Mesh(geometry('dust',()=>new THREE.IcosahedronGeometry(1,0)),dustMaterial);const angle=i*Math.PI*2/5;puff.position.set(Math.cos(angle)*.45,.35,Math.sin(angle)*.35);puff.scale.set(.25,.18,.25);dust.add(puff);}
@@ -291,7 +412,7 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
       }
     }
     animationStart = performance.now();
-    queueReactions();
+    updateServiceLabels();queueReactions();
   }
   function clearReactions(){ reactions.forEach(reaction=>reaction.element.remove());reactions=[]; }
   function queueReactions(){
@@ -327,12 +448,23 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
   function updateSelection() {
     for (const district of districtRecords) {
       const active = district.id === props.districtId;
-      const hovered = district.id === hoveredDistrictId;
+      const hovered = district.id === hoveredDistrictId || Boolean(projectHighlight && (projectHighlight.districtId===null || projectHighlight.districtId===district.id) && district.modeled);
       district.label?.classList.toggle('active', active);
       for (const outline of district.outlines) { outline.material.color.set(hovered ? 0x327857 : active ? 0x6b9975 : 0xc3cdbb); outline.material.opacity = active||hovered ? 1 : .8; }
       for (const mesh of district.meshes) mesh.material[0].color.set(hovered ? 0xd3e5c8 : active ? 0xdde8d1 : district.modeled ? COLORS.land : COLORS.outside);
     }
     if (!ready3d && geography) drawFallback();
+  }
+  function highlightProject(measureId, districtId = null) {
+    for(const ring of highlightRings){scene?.remove(ring);ring.material.dispose();}highlightRings=[];
+    projectHighlight=measureId?{measureId,districtId}:null;updateSelection();
+    if(!measureId||!ready3d)return;
+    const type=PROJECT_SERVICE[measureId];
+    for(const district of districtRecords.filter(item=>item.modeled&&(districtId===null||item.id===districtId))){
+      const site=type?serviceSites.get(`${district.id}:${type}`):projectSite(district,measureId);if(!site)continue;
+      const ring=new THREE.Mesh(geometry('project-hover-ring',()=>new THREE.RingGeometry(.91,1,40)),new THREE.MeshBasicMaterial({color:COLORS.green,transparent:true,opacity:.7,depthWrite:false,depthTest:false}));
+      ring.rotation.x=-Math.PI/2;ring.position.set(site[0],.195,-site[1]);ring.renderOrder=4;scene.add(ring);highlightRings.push(ring);
+    }
   }
   function setHoveredDistrict(id,showLabel=false) {
     if(id!==hoveredDistrictId){hoveredDistrictId=id;updateSelection();onDistrictHover(id);}
@@ -354,8 +486,14 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
     for(const landmark of landmarkLabels){
       const point=new THREE.Vector3(...landmark.position).project(camera),x=(point.x+1)/2*width,y=(1-point.y)/2*height-20;
       const labelWidth=Math.min(180,landmark.element.textContent.length*6+20),rect={left:x-labelWidth/2,right:x+labelWidth/2,top:y-13,bottom:y+13};
-      const hidden=camera.zoom<2||rect.left<8||rect.right>width-8||rect.top<65||rect.bottom>height-40||occupied.some(other=>rect.left<other.right+4&&rect.right>other.left-4&&rect.top<other.bottom+4&&rect.bottom>other.top-4);
+      const hidden=true; // Mapped landmarks stay visible without persistent nameplates.
       landmark.element.hidden=hidden;if(!hidden){landmark.element.style.left=`${x}px`;landmark.element.style.top=`${y}px`;occupied.push(rect);}
+    }
+    for(const service of baselineServices){
+      const point=service.group.position.clone().add(new THREE.Vector3(0,.85,0)).project(camera),x=(point.x+1)/2*width,y=(1-point.y)/2*height;
+      const labelWidth=service.type.name.length*5.5+24,rect={left:x-labelWidth/2,right:x+labelWidth/2,top:y-11,bottom:y+11};
+      const hidden=service.district.id!==props.districtId||camera.zoom<2.5||rect.left<10||rect.right>width-10||rect.top<155||rect.bottom>height-245||occupied.some(other=>rect.left<other.right+4&&rect.right>other.left-4&&rect.top<other.bottom+4&&rect.bottom>other.top-4);
+      service.label.hidden=hidden;if(!hidden){service.label.style.left=`${x}px`;service.label.style.top=`${y}px`;occupied.push(rect);}
     }
     if(projectFocusLabel){const group=focusedProject&&upgrades.find(item=>item.userData.measureId===focusedProject.measureId&&item.userData.districtId===focusedProject.districtId);projectFocusLabel.hidden=!group;if(group){const point=group.position.clone().add(new THREE.Vector3(0,1.25,0)).project(camera),x=(point.x+1)/2*width,y=(1-point.y)/2*height;projectFocusLabel.textContent=`${props.measureNames?.[focusedProject.measureId]??focusedProject.measureId} · ${districtRecords.find(item=>item.id===focusedProject.districtId)?.name??''}`;projectFocusLabel.style.left=`${x}px`;projectFocusLabel.style.top=`${y}px`;projectFocusLabel.hidden=x<110||x>width-110||y<70||y>height-40;}}
   }
@@ -392,12 +530,13 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
     const moving=!props.paused&&!reducedMotion&&(!props.replay||props.replay.running);
     const speed=props.replay?.speed??1;
     if(moving){motionTime+=elapsed*speed;updatePopulation();}
+    cityDetails?.update?.({timeSeconds:motionTime,motionEnabled:moving});
     if(focusTween){const t=Math.min(1,(now-focusTween.start)/450),e=1-(1-t)**3;controls.target.lerpVectors(focusTween.fromTarget,focusTween.toTarget,e);camera.position.lerpVectors(focusTween.fromPosition,focusTween.toPosition,e);camera.zoom=focusTween.fromZoom+(focusTween.toZoom-focusTween.fromZoom)*e;camera.updateProjectionMatrix();if(t===1)focusTween=null;}
     for(const group of upgrades){
       if(reducedMotion)group.userData.reveal=1;
       else if(moving)group.userData.reveal=Math.min(1,group.userData.reveal+elapsed*speed/.7);
       const progress=group.userData.animate?group.userData.reveal:1;
-      group.scale.y=.75*(.65+.35*(1-(1-progress)**3));
+      group.scale.y=group.userData.scale*(.65+.35*(1-(1-progress)**3));
       if(group.userData.dust){group.userData.dust.visible=progress<1;group.userData.dust.scale.setScalar(1+progress);group.userData.dust.children[0].material.opacity=.7*(1-progress);}
     }
     controls.update();placeLabels();updateReactions(now);renderer.render(scene,camera);frame=requestAnimationFrame(tick);
@@ -452,6 +591,6 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
     } catch(error) { ready3d=false;console.warn('Using district fallback:',error.stack ?? error.message);drawFallback(); }
     finally {clearTimeout(timeout);loadingHost.hidden=true;}
   }
-  const api={ready:null,update(next){props={...props,...next};if(typeof next.reducedMotion==='boolean')reducedMotion=next.reducedMotion;if(!MODES.has(props.mode))props.mode='draft';if(props.mode!=='after'||props.paused)clearReactions();if(reducedMotion&&focusTween){controls.target.copy(focusTween.toTarget);camera.position.copy(focusTween.toPosition);camera.zoom=focusTween.toZoom;camera.updateProjectionMatrix();focusTween=null;}updateSelection();updateUpgrades();},focusDistrict,focusProject,focusLandmark,resetView:()=>resetView(),dispose(){disposed=true;clearReactions();clearUpgrades();cityDetails?.dispose();cancelAnimationFrame(frame);resizeObserver?.disconnect();controls?.dispose();renderer?.dispose();materials.forEach(item=>item.dispose());geometries.forEach(item=>item.dispose());}};
+  const api={ready:null,update(next){props={...props,...next};if(typeof next.reducedMotion==='boolean')reducedMotion=next.reducedMotion;if(!MODES.has(props.mode))props.mode='draft';if(props.mode!=='after'||props.paused)clearReactions();if(reducedMotion&&focusTween){controls.target.copy(focusTween.toTarget);camera.position.copy(focusTween.toPosition);camera.zoom=focusTween.toZoom;camera.updateProjectionMatrix();focusTween=null;}updateSelection();updateUpgrades();updateServiceLabels();},focusDistrict,focusProject,focusLandmark,highlightProject,resetView:()=>resetView(),dispose(){disposed=true;highlightProject(null);clearReactions();clearUpgrades();baselineServices.forEach(service=>{service.label.remove();scene?.remove(service.group);});cityDetails?.dispose();cancelAnimationFrame(frame);resizeObserver?.disconnect();controls?.dispose();renderer?.dispose();materials.forEach(item=>item.dispose());geometries.forEach(item=>item.dispose());}};
   api.ready=init();return api;
 }

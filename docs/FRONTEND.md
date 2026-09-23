@@ -81,3 +81,27 @@ Narration is button initiated. `/api/speech` receives exactly `.adviser-text`'s 
 - Browser forced 2D: replaced lighting with M11 in Almaty, completed at 55.14; road flow 38.3 / -1.8 is visibly critical and road safety +10.5 remains positive. Completing while Timeline was open leaves only the result dialog open.
 
 Limits: the R02 checkpoint does not edit `city.js` or implement landmark models. A/Claude own those integrations. Browser speech fallback and an OS-level reduced-motion switch were not deliberately forced; code handles both, while backend no-key/transport tests pass. Printed/exported artifact files have not been manually reviewed. No dragging or worker-machine ornament is added.
+
+## R02 combined follow-up on 0566aeb
+
+The real browser JSON download at `/Users/admin/Downloads/akim-lab-plan.json` was parsed and its result deep-compared with `simulatePlan(selections)`: five selections, cost95, full score56.54306999999999, critical0, correct dataset version and map/scenario provenance. The Print button was invoked, but the in-app browser exposed no print preview or printed artifact. Printing therefore remains unverified. Its available browser capabilities also lack media emulation. A temporary Node harness executed the actual `applyPlan`/`finishRun` code with `reducedMotion=true`: it immediately preserved the exact shared result, kept motion paused and opened the end report. This is a control-flow check, not verification of OS preference propagation.
+
+## R05: existing services and additive projects
+
+Every modeled district has six permanent representative service parcels: school, clinic, safety/lighting post, utility plant, civic service centre and transit stop. Their locations are deterministic illustrative placements near the mapped road samples, with a deterministic land search when samples are sparse. They are not a surveyed service inventory. Before, draft, quarter zero, replay, Plan A and completed views retain the same baseline objects. Zoomed district labels identify the service; tooltips show its corresponding shared-model indicator and whether its project is planned or completed.
+
+Projects linked to those services add a wing, retrofit, signal, lamp/camera, crossing, service terminal, transit segment or crew van beside the original form. Independent park, greening and sports interventions use smaller separate parcels. Construction scaffolding occupies the extension side while the existing service stays open visually; completion follows `completedMeasureIds`, and indicator values remain the shared frame's values. No new scores or economic model are introduced.
+
+All service and project parcels are reserved before ordinary filler buildings are sampled. The placement check uses distances to district and water boundaries, including holes, plus `cityDetails.isReserved`. This catches narrow waterways passing through a footprint, which checking only its corners would miss. Six existing parcels and three independent intervention parcels are allocated deterministically per district; building filler avoids these spaces. Physical bounds are checked separately from decorative selection rings.
+
+`cityDetails.update?.({timeSeconds: motionTime, motionEnabled: moving})` uses the same elapsed-time clock as road population. The optional call safely handles older detail modules and freezes with pause/reduced motion; replay speed scales elapsed time. The mapped LRT remains a geographic detail, separate from the synthetic M3 intervention.
+
+Per the latest user direction, persistent landmark nameplates are hidden; mapped landmark meshes and `focusLandmark` remain available. The new `highlightProject(measureId|null, districtId|null)` API highlights an affected district/service parcel or all five modeled districts for a city-wide project. Passing null clears it. It does not change plan selections, results or camera. R07 will wire card hover/focus to this method.
+
+### R05 validation
+
+A temporary Node geometry harness runs the actual scene functions with the real vendored Three geometry and real geography, replacing only WebGL/DOM presentation. It verifies 30 services across five districts; their actual footprint corners are on land and outside reserved layers; identical baseline group objects survive all nine replay quarters and every view; all nine published-example visual additions follow construction completion IDs. Every one of the fourteen archetypes renders for every permitted district and has physical footprint corners on unreserved land. Hover ring counts switch 5 → 1 → 0 without changing selections. The details clock stops for both pause and reduced motion. This caught and corrected a narrow-waterway footprint collision and an overlarge independent park parcel.
+
+Browser on port3001 verified actual WebGL, six service labels per district (30 total), zero visible landmark nameplates, and a paused quarter-zero scene with existing forms plus scaffolding, no upgraded labels and no official score. Existing 76 engine/server/acceptance tests still pass. Syntax and whitespace checks pass.
+
+This checkpoint is based on geography/module 0566aeb. The next 14-landmark/LRT geometry and enhanced detail module are parallel dependencies; recheck placement after integrating them. No claim of a measured frame rate or surveyed building inventory is made.
