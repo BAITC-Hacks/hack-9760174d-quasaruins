@@ -1,4 +1,4 @@
-# Frontend — I02
+# Frontend — I02 and R02
 
 Light, browser-native Akim Lab frontend. Start with `PORT=3001 ./scripts/start.sh` for the builder worktree (lead uses port 3000). Three.js and OrbitControls are locally vendored by the lead; no CDN or frontend build/install step is needed.
 
@@ -14,7 +14,7 @@ The browser imports `DATASET`/`EXAMPLE_PLAN` and `BASELINE`/`validatePlan`/`simu
 
 ## Plan state
 
-Selections are keyed by `measureId`, with `districtId: null` for city-wide projects. Slots retain selection order; simulation output is allowed to use its own canonical ordering. Each addition/target change passes `validatePlan(..., {allowPartial:true})`. The final Apply action calls `simulatePlan` and requires a valid five-project plan. Editing clears the applied result and pending advice, leaving the baseline explicitly labeled as a reference.
+Selections are keyed by `measureId`, with `districtId: null` for city-wide projects. Slots retain selection order; simulation output is allowed to use its own canonical ordering. Each addition/target change passes `validatePlan(..., {allowPartial:true})`. Start calls `timelinePlan` once and requires a valid five-project plan. Its quarter-eight result is exactly `simulatePlan`. Editing clears the applied result and pending advice, leaving the baseline explicitly labeled as a reference.
 
 Undo retains up to 30 edit snapshots. Local storage saves only selections/locks and the pinned Plan A selection set, under the dataset version; restored results are recomputed. A/B and before/after reuse one camera. Advice, export and pin actions require the currently displayed, applied plan, so viewing baseline or Plan A cannot silently act on Plan B.
 
@@ -28,7 +28,7 @@ The scene consumes `/api/geography` and uses its origin to project longitude/lat
 
 Sarayshyk is neutral and has no scenario score. Polygon rings that collapse to fewer than three distinct vertices or zero area are excluded from mesh triangulation; this protects the renderer from simplification artifacts, without changing simulation data. All source attribution is provided through the map response and footer.
 
-Each of the 14 projects maps to a small reusable visual form (transit, signals, rail, park, utility retrofit, city greening, school, clinic, sports, safety lighting, crossing, digital hub, network, response van). Draft layers are translucent; valid applied layers are solid. Replacing/removing a project rebuilds that derived layer instead of accumulating permanent upgrades. City-wide measures display in all five modeled districts. Asset locations and sizes are illustrative, not construction proposals. The short vertical reveal is a presentation transition, not a quarter-by-quarter forecast.
+Each of the 14 projects maps to a small reusable visual form (transit, signals, rail, park, utility retrofit, city greening, school, clinic, sports, safety lighting, crossing, digital hub, network, response van). Draft layers are translucent; valid applied layers are solid. Replacing/removing a project rebuilds that derived layer instead of accumulating permanent upgrades. City-wide measures display in all five modeled districts. Asset locations and sizes are illustrative, not construction proposals. The short vertical reveal is a presentation transition. The HUD now supplies shared timeline frames to the renderer; quarter 1–7 is explicitly illustrative, not a forecast.
 
 The 3D module and vendor imports fail independently of the model. Missing WebGL/geography provides a labeled 2D district view and the same HTML controls/results. `/?view=2d` deliberately selects this fallback for a compatibility check. Labels that would overlap at distant zoom levels are hidden; all modeled districts remain accessible through the labeled district buttons. Shared meshes/materials, instanced base buildings, bounded procedural density, bounded zoom/elevation and a pixel-ratio cap limit rendering cost. No frame-rate guarantee has been measured.
 
@@ -57,3 +57,27 @@ These checks describe the first checkpoint, `ff05bcc`. Further checks and exact 
 Validation for this increment includes the 71-test merged model/server/acceptance suite, direct road-interpolation edge checks, real browser reaction values (school +10, clinic +8.75), camera/project comparison controls and pause/resume. Two cropped paused-canvas captures were identical; moving-state captures changed. The comparison flow showed one addition/one removal, 57.21 for current B, and 56.54 for the corresponding pinned A.
 
 Remaining limits: representative assets rather than surveyed buildings; no landmark silhouettes, individual pathfinding or calibrated travel times; no promised frame rate. Export/print artifacts and a deliberately delayed network-race scenario still require manual review. OS-level reduced-motion changes are handled in code; that system setting has not been changed during the browser check.
+
+
+## R02: fullscreen HUD and construction replay
+
+The city fills the viewport. A compact top HUD shows the budget, slot count, baseline or completed official score, weakest district and critical count. The bottom horizontal tray uses fourteen distinct inline SVG icons, short names and costs. Hover, keyboard focus and tap expose the full description, base effects, delay and scope. District projects use card → district placement; labeled district buttons and an explicit Place button provide keyboard and touch alternatives. City-wide cards add across all five districts. Invalid additions show the shared validator's reason.
+
+Detailed slots/locks, statistics/end report, timeline and source information open in native modal dialogs. Only one dialog is open at a time. The report retains the score ledger, adverse effects, district indicators, immutable Plan A comparison, verified improvement, JSON export and print. Project inspection closes the report and focuses its map asset.
+
+Start calls `timelinePlan(selections)` once. The client owns only the replay clock: one quarter takes 1.8 seconds at 1×; pause, 2× and 4× change playback. Background tabs pause progression. The renderer receives the matching shared frame result and `replay: {quarter, completedMeasureIds, running, speed}` with mode `after`. A owns construction scene implementation. No official headline or adviser is available during a run; the HUD shows an em dash until quarter eight. Quarter zero is baseline and intermediate report/chart values are labeled illustrative. The end result is the exact final shared frame. Edits cancel the run and clear computed results/advice. Reduced motion skips to the same official endpoint.
+
+The timeline window draws a city/district chart and accessible numeric table using only frames reached so far. The end report opens automatically at quarter eight. Pinning a completed plan preserves A while subsequent edits and runs form B.
+
+Narration is button initiated. `/api/speech` receives exactly `.adviser-text`'s displayed briefing, with an AI-generated voice disclosure. The visible text remains the transcript. Stop, dialog close, view changes, plan edits and new advice stop/revoke audio and cancel speech requests. A failed server request attempts browser speech, then retains the text. Revision/request identity checks discard stale responses. API keys remain server-side. The optional second `onCredit(text, attributionUrl)` callback argument creates a safe HTTP(S) source link in About; legacy one-argument callbacks still show attribution text.
+
+### R02 checks on port 3001
+
+- All 76 shared model/server/acceptance tests pass, including exact q8 replay equality, negative effects, invalid plans and speech transport. Frontend syntax and whitespace checks pass.
+- Browser desktop 1280×900: full-canvas map, compact HUD and horizontal tray; card selection alone leaves 0/5, clicking Nura places the school at 24 units. Start remains disabled for a partial plan.
+- Browser example replay: Pause held at Q0 across observations, official headline stayed empty; 4× resumed to 56.54 / +3.99 / zero critical indicators. Intermediate timeline rows explicitly say illustrative.
+- Browser mobile 390×844: usable HUD/cards/district controls and modal report. No page or report horizontal overflow after correcting inherited inspector grid placement. Saved A 56.54 versus replacement B 57.21 shows +0.66, cost95 → 100.
+- Browser live AI: verified briefing and replacement proposal rendered. Read briefing aloud progressed from preparation to AI-generated voice playback; Stop worked without browser errors.
+- Browser forced 2D: replaced lighting with M11 in Almaty, completed at 55.14; road flow 38.3 / -1.8 is visibly critical and road safety +10.5 remains positive. Completing while Timeline was open leaves only the result dialog open.
+
+Limits: the R02 checkpoint does not edit `city.js` or implement landmark models. A/Claude own those integrations. Browser speech fallback and an OS-level reduced-motion switch were not deliberately forced; code handles both, while backend no-key/transport tests pass. Printed/exported artifact files have not been manually reviewed. No dragging or worker-machine ornament is added.

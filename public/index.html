@@ -1,69 +1,49 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#F5F4EF">
-  <title>Akim Lab — One city, two futures</title>
-  <link rel="stylesheet" href="/styles.css">
-  <script type="importmap">{"imports":{"three":"/vendor/three.module.js"}}</script>
-  <script type="module" src="/app.js"></script>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#F5F4EF">
+  <title>Akim Lab — One city, two futures</title><link rel="stylesheet" href="/styles.css">
+  <script type="importmap">{"imports":{"three":"/vendor/three.module.js"}}</script><script type="module" src="/app.js"></script>
 </head>
 <body>
-  <a class="skip-link" href="#project-library">Skip to project library</a>
-  <header class="app-header">
-    <a class="brand" href="/" aria-label="Akim Lab home"><span class="brand-mark" aria-hidden="true">a<span>·</span></span><span><strong>akim<span class="brand-light">lab</span></strong><small>ASTANA CITY SIMULATOR</small></span></a>
-    <div class="header-note"><span class="live-dot"></span> Your city. Your five decisions.</div>
-    <div class="header-actions"><button id="load-example" class="button subtle" disabled>Try an example</button><button id="undo" class="button icon-button" disabled title="Undo last plan edit" aria-label="Undo last plan edit">↶</button><button id="reset-plan" class="button subtle" disabled>Reset plan</button></div>
-  </header>
-
-  <main id="app" aria-busy="true">
-    <section class="planning-bar" aria-label="Plan and budget">
-      <div class="budget-block"><div class="eyebrow">YOUR BUDGET</div><div class="budget-number"><strong id="spent">0</strong><span>/ 100</span></div><div class="budget-track" role="progressbar" aria-label="Budget used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="budget-fill"></span></div><small id="remaining">100 units available</small></div>
-      <div class="plan-block"><div class="plan-heading"><span class="eyebrow">FIVE DECISIONS, ONE FUTURE</span><span id="slot-count">0 / 5 selected</span></div><div id="plan-slots" class="plan-slots" aria-label="Selected projects"></div></div>
-      <div class="run-block"><button id="apply-plan" class="button primary run-button" disabled><span>Simulate my city</span><span aria-hidden="true">↗</span></button><span id="plan-hint">Choose five projects to begin</span></div>
-    </section>
-
-    <div id="app-message" class="app-message" role="status" aria-live="polite">Loading the city model…</div>
-
-    <div class="workspace">
-      <aside class="library panel" id="project-library" aria-labelledby="library-title">
-        <div class="panel-heading"><div><span class="eyebrow">01 / MAKE YOUR CHOICES</span><h1 id="library-title">Project library</h1></div><span id="project-total" class="count-badge">14</span></div>
-        <label class="target-label" for="target-district">Place district projects in</label><select id="target-district" disabled aria-describedby="target-help"></select><p id="target-help" class="help">Choose here or select a district on the city.</p>
-        <div id="category-filters" class="category-filters" aria-label="Filter projects by category"></div>
-        <div id="projects" class="project-list"><p class="empty-copy">The project catalog is loading.</p></div>
-        <div class="library-foot">Up to 2 projects per category.<br>City-wide projects cover all five modeled districts.</div>
-      </aside>
-
-      <section class="city-column" aria-labelledby="city-title">
-        <div class="city-intro"><div><span class="eyebrow">A SMALL CITY. A BIG RESPONSIBILITY.</span><h2 id="city-title">One city, two futures.</h2><p>Build a better everyday life, one decision at a time.</p></div><span class="model-tag">8-quarter scenario</span></div>
-        <div class="city-stage">
-          <div class="scene-topline"><span id="scene-state" class="scene-state">BASELINE CITY</span><div class="scene-tools"><button id="reset-view" class="map-button" aria-label="Fit the whole city" title="Fit the whole city">⌖ <span>Fit city</span></button><button id="pause-city" class="map-button" aria-pressed="false">Pause motion</button></div></div>
-          <div id="city-canvas" class="city-canvas" aria-label="Isometric Astana city visualization"></div>
-          <div id="city-labels" class="city-labels"></div>
-          <div id="city-reactions" class="city-reactions" aria-hidden="true"></div>
-          <div id="city-fallback" class="city-fallback" hidden></div>
-          <div id="scene-loading" class="scene-loading"><span class="loading-orbit" aria-hidden="true"></span><span>Preparing your miniature city…</span></div>
-          <div class="map-caption"><span><span class="legend-square"></span> Real geography · representative buildings</span><span>Drag to orbit · scroll to zoom</span></div>
-        </div>
-        <div id="district-shortcuts" class="district-shortcuts" aria-label="Focus a district"></div>
-        <div class="comparison-bar"><div class="view-switch" aria-label="Compare city views"><button data-view="before" aria-pressed="false">Before</button><button data-view="after" aria-pressed="true">Your plan</button><button id="view-a" data-view="a" aria-pressed="false" disabled>Plan A</button></div><button id="pin-plan" class="button subtle" disabled>Pin as Plan A <span aria-hidden="true">＋</span></button></div>
-        <div id="project-change-summary" class="project-change-summary"></div>
-        <p id="scene-description" class="scene-description">Choose projects to preview their locations. Buildings and placement are illustrative.</p>
-      </section>
-
-      <aside class="inspector panel" aria-labelledby="results-title">
-        <div class="panel-heading"><div><span class="eyebrow">02 / SEE THE IMPACT</span><h2 id="results-title">Your city, explained</h2></div></div>
-        <div id="validation" class="validation"></div>
-        <section id="headline-result" class="headline-result" aria-live="polite"></section>
-        <div id="district-results" class="district-results"></div>
-        <details id="score-evidence" class="evidence"><summary>How the score is calculated</summary><div id="score-breakdown"></div></details>
-        <section class="district-detail"><div class="section-heading"><h3 id="focus-name">District indicators</h3><span id="focus-share"></span></div><div id="indicator-list" class="indicator-list"></div></section>
-        <section class="adviser-section" aria-labelledby="adviser-title"><div class="section-heading"><h3 id="adviser-title">A second perspective</h3><span class="adviser-badge">AI ADVISER</span></div><p class="help">Get an explanation grounded in your calculated plan.</p><div class="adviser-actions"><button id="get-advice" class="button" disabled>Explain my plan</button><button id="get-improvement" class="button subtle" disabled>Find one improvement</button></div><div id="adviser-output" class="adviser-output" aria-live="polite"></div><div id="suggestion-output"></div></section>
-        <div class="report-actions"><button id="export-plan" class="button subtle" disabled>Export plan JSON</button><button id="print-plan" class="button subtle" disabled>Print</button></div>
-      </aside>
+<a class="skip-link" href="#project-library">Skip to projects</a>
+<main id="app" aria-busy="true">
+  <section class="city-stage" aria-label="Astana miniature city">
+    <div id="city-canvas" class="city-canvas" aria-label="Isometric Astana city visualization"></div><div id="city-labels" class="city-labels"></div><div id="city-reactions" class="city-reactions" aria-hidden="true"></div><div id="city-fallback" class="city-fallback" hidden></div>
+    <div id="scene-loading" class="scene-loading"><span class="loading-orbit" aria-hidden="true"></span>Preparing your miniature city…</div>
+  </section>
+  <header class="hud surface">
+    <a class="brand" href="/" aria-label="Akim Lab home"><span class="brand-mark" aria-hidden="true">a·</span><span><strong>akim<span>lab</span></strong><small>ASTANA · CITY SIMULATOR</small></span></a>
+    <div class="hud-metrics">
+      <div class="hud-stat budget-stat"><small>Budget used</small><strong><span id="spent">0</span><span class="stat-unit"> / 100</span></strong><div class="budget-track" role="progressbar" aria-label="Budget used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="budget-fill"></span></div><span id="remaining" class="sr-only"></span></div>
+      <button class="hud-stat stat-button" data-open="plan-dialog"><small>Project slots ↗</small><strong id="slot-count">0 / 5</strong></button>
+      <div class="hud-stat"><small id="hud-score-label">Baseline</small><strong id="hud-score">52.56</strong></div>
+      <div class="hud-stat secondary-stat"><small id="hud-weak-label">Weakest · baseline</small><strong id="hud-weak">Nura</strong></div>
+      <div class="hud-stat secondary-stat"><small>Indicators &lt;40</small><strong id="hud-critical">2</strong></div>
     </div>
-  </main>
-  <footer class="app-footer"><span>Made for a city worth caring about.</span><details><summary>About the scenario &amp; map</summary><p>Organizer-supplied synthetic effects and district indicators. This is a decision simulator, not a prediction of real policy outcomes. The real geographic backdrop includes Sarayshyk, which is outside the five-district scenario. Buildings, project locations, vehicles and reactions are illustrative.</p><p id="geography-credit">Geography: Astana public geoportal. Sources and limitations are documented with the application.</p></details><span class="footer-mark">AKIM LAB / HACKALEM</span></footer>
-</body>
-</html>
+    <nav class="hud-nav" aria-label="City windows"><button class="button" data-open="report-dialog">Statistics</button><button class="button" data-open="chart-dialog">Timeline</button><button class="button icon-button" data-open="about-dialog" aria-label="About this scenario">ⓘ</button></nav>
+  </header>
+  <div class="map-toolbar">
+    <div class="scene-status"><span class="live-dot"></span><span id="scene-state">BASELINE CITY</span><span id="hover-district"></span></div>
+    <div class="scene-tools surface"><button id="reset-view" class="map-button" aria-label="Fit the whole city">⌖ <span>Fit city</span></button><span class="tool-divider"></span><button id="pause-city" class="map-button" aria-pressed="false">Pause</button><div class="speed-controls" aria-label="Replay speed"><button data-speed="1" aria-pressed="true">1×</button><button data-speed="2" aria-pressed="false">2×</button><button data-speed="4" aria-pressed="false">4×</button></div></div>
+  </div>
+  <div class="world-title" aria-hidden="true"><span>ONE CITY, TWO FUTURES</span><h1>Make room<br>for better.</h1><p>Five decisions. A city that changes.</p></div>
+  <div id="app-message" class="app-message" role="status" aria-live="polite">Loading the city model…</div>
+  <section id="project-peek" class="project-peek surface" aria-label="Project details" hidden><div class="peek-heading"><span id="peek-category" class="eyebrow"></span><button id="close-peek" class="icon-button" aria-label="Close project details">×</button></div><h2 id="peek-title"></h2><p id="peek-description"></p><div id="peek-effects" class="effect-chips"></div><p id="peek-meta" class="help"></p><p id="peek-action" class="placement-hint"></p><button id="place-current" class="button primary" hidden></button></section>
+  <div class="city-bottom-tools"><div id="district-shortcuts" class="district-shortcuts" aria-label="Choose a district"></div><div class="view-switch surface" aria-label="Compare city views"><button data-view="before" aria-pressed="false">Before</button><button data-view="after" aria-pressed="true">Your plan</button><button id="view-a" data-view="a" aria-pressed="false" disabled>Plan A</button></div></div>
+  <section class="project-deck surface" id="project-library" aria-label="Project library">
+    <div class="deck-heading"><div class="deck-title"><strong>Build your future</strong><span id="project-total" class="count-badge">14</span></div><div id="category-filters" class="category-filters" aria-label="Filter projects by category"></div><div class="deck-actions"><button id="load-example" class="button subtle" disabled>Example</button><button id="undo" class="button icon-button" disabled aria-label="Undo last plan edit">↶</button><button id="reset-plan" class="button subtle" disabled>Reset</button><button id="apply-plan" class="button primary" disabled><span>Start</span><span aria-hidden="true"> ▶</span></button></div></div>
+    <div id="projects" class="project-list"></div><div class="deck-foot"><span id="plan-hint">Choose a card, then a district.</span><span>Up to 2 per category · 8 quarters</span></div>
+  </section>
+  <div class="map-credit"><button data-open="about-dialog">Map &amp; scenario sources</button><span>Real geography · illustrative buildings</span></div>
+  <p id="scene-description" class="sr-only"></p>
+</main>
+<dialog id="plan-dialog" aria-labelledby="plan-title"><div class="dialog-heading"><div><span class="eyebrow">YOUR FIVE DECISIONS</span><h2 id="plan-title">The project plan</h2></div><button class="icon-button" data-close aria-label="Close plan">×</button></div><p class="help">Change a district, remove a project, or lock choices to keep them in adviser suggestions.</p><div id="plan-slots" class="plan-slots" aria-label="Selected projects"></div><label class="target-label" for="target-district">Focus district</label><select id="target-district" disabled></select><div id="validation" class="validation"></div></dialog>
+<dialog id="report-dialog" class="report-dialog" aria-labelledby="results-title"><div class="dialog-heading"><div><span class="eyebrow" id="report-eyebrow">CITY STATISTICS</span><h2 id="results-title">Your city, explained</h2></div><button class="icon-button" data-close aria-label="Close statistics">×</button></div><div class="report-grid"><div><section id="headline-result" class="headline-result" aria-live="polite"></section><div id="district-results" class="district-results"></div><details id="score-evidence" class="evidence"><summary>How the score is calculated</summary><div id="score-breakdown"></div></details></div><section class="district-detail"><div class="section-heading"><h3 id="focus-name">District indicators</h3><span id="focus-share"></span></div><div id="indicator-list"></div></section></div>
+  <section class="comparison-section"><div class="section-heading"><h3>Two possible futures</h3><button id="pin-plan" class="button" disabled>Pin as Plan A ＋</button></div><div id="plan-comparison" class="help"></div><div id="project-change-summary" class="project-change-summary"></div></section>
+  <section class="adviser-section" aria-labelledby="adviser-title"><div class="section-heading"><h3 id="adviser-title">The policy briefing</h3><span class="adviser-badge">GROUNDED AI ADVISER</span></div><div class="adviser-actions"><button id="get-advice" class="button primary" disabled>Explain my plan</button><button id="get-improvement" class="button" disabled>Find one improvement</button></div><div id="adviser-output" class="adviser-output" aria-live="polite"></div><div id="voice-controls" class="voice-controls" hidden><button id="read-briefing" class="button">Read briefing aloud</button><button id="stop-voice" class="button subtle" disabled>Stop</button><span id="voice-status" role="status">AI-generated voice · displayed briefing is the transcript.</span></div><div id="suggestion-output"></div></section>
+  <div class="report-actions"><button id="export-plan" class="button" disabled>Export plan JSON</button><button id="print-plan" class="button subtle" disabled>Print report</button><button class="button primary" data-close>Back to the city</button></div>
+</dialog>
+<dialog id="chart-dialog" aria-labelledby="chart-title"><div class="dialog-heading"><div><span class="eyebrow">EIGHT QUARTERS</span><h2 id="chart-title">A city over time</h2></div><button class="icon-button" data-close aria-label="Close timeline">×</button></div><p id="timeline-notice" class="help">Start a valid five-project plan to see its construction replay.</p><div id="timeline-chart"></div><div id="timeline-table"></div></dialog>
+<dialog id="about-dialog" aria-labelledby="about-title"><div class="dialog-heading"><h2 id="about-title">A model, made visible</h2><button class="icon-button" data-close aria-label="Close about">×</button></div><p>Organizer-supplied synthetic district indicators and project effects. This is a decision simulator, not a prediction of real policy outcomes.</p><p>The real Astana backdrop includes Sarayshyk, outside this five-district scenario. Buildings, interventions, traffic and citizen reactions are illustrative. Quarter 1–7 values are an illustrative replay; quarter 8 is the official scenario outcome.</p><p id="geography-credit">Geography: Astana public geoportal and attributed offline layers.</p><p>Drag to orbit · scroll to zoom · choose a district by map or labeled button. All project details are available by tap and keyboard focus.</p></dialog>
+</body></html>

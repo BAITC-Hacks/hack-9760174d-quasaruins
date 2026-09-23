@@ -7,10 +7,10 @@ const clone = (value) => JSON.parse(JSON.stringify(value));
 const key = (plan) => plan.map((item) => `${item.measureId}:${item.districtId ?? '*'}`).sort().join('|');
 const storageKey = 'akim-lab.plan.v1';
 const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
-const state = { selections: [], history: [], locks: new Set(), applied: null, pinned: null, districtId: 'nura', category: 'all', view: 'after', paused: motionPreference.matches, reducedMotion: motionPreference.matches, revision: 0, busy: null, request: null, suggestion: null };
-let DATASET, EXAMPLE_PLAN, BASELINE, validatePlan, simulatePlan, city;
+const state = { selections: [], history: [], locks: new Set(), applied: null, pinned: null, districtId: 'nura', category: 'all', view: 'after', paused: motionPreference.matches, reducedMotion: motionPreference.matches, revision: 0, busy: null, request: null, suggestion: null, pending: null, peek: null, run: null, timeline: null, speed: 1, speech: null, speechRequest: null, speechUrl: null };
+let DATASET, EXAMPLE_PLAN, BASELINE, validatePlan, simulatePlan, timelinePlan, city;
 let measures = new Map(), districts = new Map(), categories = new Map();
-motionPreference.addEventListener('change', event => { state.reducedMotion = event.matches; if(event.matches) state.paused = true; render(); });
+motionPreference.addEventListener('change', event => { state.reducedMotion = event.matches; if(event.matches) { state.paused = true; if(state.run) finishRun(); } render(); });
 
 function node(tag, className, content, attrs = {}) {
   const item = document.createElement(tag);
@@ -32,6 +32,7 @@ function districtName(id) { return districts.get(id)?.name ?? 'City-wide'; }
 function effectiveResult() {
   if (state.view === 'before') return BASELINE;
   if (state.view === 'a' && state.pinned) return state.pinned.result;
+  if (state.run) return state.run.frames[state.run.quarter].result;
   return state.applied?.result ?? BASELINE;
 }
 function displayedPlan() {
@@ -43,8 +44,8 @@ function cancelRequest() {
   state.request?.abort(); state.request = null; state.busy = null;
 }
 function invalidateAdvice() {
-  cancelRequest(); state.suggestion = null;
-  $('adviser-output').replaceChildren(); $('suggestion-output').replaceChildren();
+  cancelRequest(); stopVoice(); state.suggestion = null;
+  $('adviser-output').replaceChildren(); $('suggestion-output').replaceChildren(); $('voice-controls').hidden = true;
 }
 function saveLocal() {
   try { localStorage.setItem(storageKey, JSON.stringify({ datasetVersion: DATASET.version, selections: state.selections, pinned: state.pinned?.selections ?? null, locks: [...state.locks] })); } catch { /* Storage may be disabled; the active plan still works. */ }
@@ -52,6 +53,7 @@ function saveLocal() {
 function editPlan(next, { remember = true } = {}) {
   if (remember) state.history.push({ selections: clone(state.selections), locks: [...state.locks] });
   if (state.history.length > 30) state.history.shift();
+  state.run = null; state.timeline = null; state.pending = null; state.peek = null; $('project-peek').hidden = true;
   state.selections = clone(next); state.applied = null; state.view = 'after'; state.revision += 1;
   const selectedIds = new Set(next.map((item) => item.measureId));
   state.locks = new Set([...state.locks].filter((id) => selectedIds.has(id)));
@@ -61,7 +63,7 @@ function chooseDistrict(id, focus = true) {
   if (!districts.has(id)) return;
   state.districtId = id;
   $('target-district').value = id;
-  render();
+  if (state.pending) { placeProject(state.pending, id); } else render();
   if (focus) city?.focusDistrict(id);
 }
 function renderSlots() {
@@ -95,56 +97,74 @@ function renderSlots() {
   }
   $('plan-slots').replaceChildren(fragment);
 }
+const projectNames = { M1:'Bus lanes', M2:'Smart signals', M3:'Light rail', M4:'New park', M5:'Clean fuel', M6:'City greening', M7:'School & daycare', M8:'Health clinic', M9:'Sports hubs', M10:'Safer streets', M11:'Safe crossings', M12:'Digital requests', M13:'Water & heating', M14:'Utility crews' };
+const projectPaths = {
+ M1:'M7 8h28v18H7z M11 12h20v8H11z M13 26v3 M29 26v3 M3 32h36',
+ M2:'M18 4h10v21H18z M23 25v10 M18 35h10 M21 9h4 M21 14h4 M21 19h4 M6 30h8 M32 30h8',
+ M3:'M9 4h24v23H9z M13 9h16v10H13z M14 23h2 M26 23h2 M15 27l-5 9 M27 27l5 9 M13 32h17 M17 4V1 M25 4V1',
+ M4:'M7 35h31 M14 28v7 M10 21c-10-9 5-17 9-8 9 4 2 16-9 8 M29 29v6 M25 25c-6-8 5-14 9-6 5 6-4 12-9 6',
+ M5:'M5 20L17 8l12 12v14H8V20 M17 25v9 M32 6c10 5 8 14 0 14-8-3-4-9 0-14 M34 27v7',
+ M6:'M7 35h30 M22 34V9 M22 24C6 26 3 12 6 10c11 0 17 6 16 14 M22 17C35 18 40 6 35 3c-10 0-15 6-13 14',
+ M7:'M4 15l17-11 17 11 M8 14v21h26V14 M17 35V24h8v11 M12 18h3 M27 18h3 M21 2v5 M21 2h8',
+ M8:'M8 9h26v26H8z M4 35h34 M17 35V25h8v10 M21 13v8 M17 17h8 M12 27h2 M29 27h2',
+ M9:'M4 8h35v25H4z M21 8v25 M21 25a5 5 0 1 0 0-10a5 5 0 1 0 0 10 M4 15h5v11H4 M39 15h-5v11h5',
+ M10:'M9 35V8q0-5 6-5h7 M22 3v5 M17 8h10 M29 35V18h8 M29 18l8-5v6 M4 35h30',
+ M11:'M5 7h33 M5 34h33 M10 13v15 M18 13v15 M26 13v15 M34 13v15 M5 20h-3 M40 20h3',
+ M12:'M5 7h32v23H5z M15 35h13 M21 30v5 M12 18l6 6 12-12',
+ M13:'M5 35V18h13v17 M18 35V8h19v27 M24 13h7 M24 20h7 M24 27h7 M10 23h3 M10 29h3 M23 8V3 M31 8V3',
+ M14:'M3 15h24v16H3z M27 20h8l5 7v4H27 M8 31v4 M33 31v4 M9 22h10 M14 17v10 M32 22v5h7'
+};
+function projectArt(id) {
+ const host=node('span','project-art',null,{'aria-hidden':'true'}), svg=document.createElementNS('http://www.w3.org/2000/svg','svg'), path=document.createElementNS(svg.namespaceURI,'path');
+ svg.setAttribute('viewBox','0 0 44 40');path.setAttribute('d',projectPaths[id]);svg.append(path);host.append(svg);return host;
+}
+function placeProject(id, districtId=state.districtId) {
+ const measure=measures.get(id); if(!measure||state.run)return;
+ const selection={measureId:id,districtId:measure.scope==='city'?null:districtId};
+ const candidate=[...state.selections,selection], checked=validatePlan(candidate,{allowPartial:true});
+ if(!checked.valid){message(checked.errors.map(error=>error.message).join(' '),true);return;}
+ editPlan(candidate);message(`${measure.name} placed ${selection.districtId?`in ${districtName(selection.districtId)}`:'across all five districts'}.`);
+}
+function showProjectDetail(id) {
+ const measure=measures.get(id);if(!measure)return;state.peek=id;
+ const selected=state.selections.find(item=>item.measureId===id), category=categories.get(measure.category);
+ $('project-peek').hidden=false;$('peek-category').textContent=`${category.name} · ${measure.cost} units`;$('peek-title').textContent=measure.name;$('peek-description').textContent=measure.description;
+ $('peek-effects').replaceChildren(...Object.entries(measure.effects).map(([indicator,value])=>node('span',`effect-chip${value<0?' negative':''}`,`${DATASET.indicators.find(item=>item.id===indicator)?.name??indicator} ${signed(value,0)}`)));
+ $('peek-meta').textContent=`Base effects before delay · completes in quarter ${measure.lag} · ${measure.scope==='city'?'City-wide':'One district'}`;
+ $('peek-action').textContent=selected?`Placed: ${districtName(selected.districtId)}. Manage districts and locks in Project slots.`:state.pending===id?'Now click a district on the map or use its labeled button.':measure.scope==='city'?'Select this card to add it across all five districts.':'Select this card, then choose its district.';
+ const action=$('place-current');action.hidden=!selected&&state.pending!==id;action.disabled=Boolean(state.run);
+ action.textContent=selected?'Remove this project':`Place in ${districtName(state.districtId)}`;
+}
 function renderProjects() {
-  const filters = [button('All projects', 'filter', () => { state.category = 'all'; render(); }, { 'aria-pressed': state.category === 'all', 'data-focus': 'filter-all' })];
-  for (const category of DATASET.categories) {
-    const filter = button(category.name, 'filter', () => { state.category = category.id; render(); }, { 'aria-pressed': state.category === category.id, 'data-focus': `filter-${category.id}` });
-    filters.push(filter);
-  }
-  $('category-filters').replaceChildren(...filters);
-  const fragment = document.createDocumentFragment();
-  const visible = DATASET.measures.filter((measure) => state.category === 'all' || measure.category === state.category);
-  $('project-total').textContent = String(visible.length);
-  for (const measure of visible) {
-    const selected = state.selections.find((item) => item.measureId === measure.id);
-    const districtId = measure.scope === 'city' ? null : state.districtId;
-    const candidate = [...state.selections, { measureId: measure.id, districtId }];
-    const validation = selected ? null : validatePlan(candidate, { allowPartial: true });
-    const category = categories.get(measure.category);
-    const card = node('article', `project-card${selected ? ' selected' : ''}`);
-    const head = node('div', 'project-card-head');
-    const categoryLabel = node('span', 'category-label'); const dot = node('span', 'category-dot'); dot.style.setProperty('--category', category?.color ?? '#327857');
-    categoryLabel.append(dot, document.createTextNode(category?.name ?? measure.category));
-    const cost = node('span', 'project-cost', measure.cost); cost.append(node('small', '', ' units'));
-    head.append(categoryLabel, cost);
-    card.append(head, node('h3', '', measure.name), node('p', 'description', measure.description));
-    const effects = node('div', 'effect-chips', null, { 'aria-label': 'Base effects before delay adjustment' });
-    for (const [id, value] of Object.entries(measure.effects)) effects.append(node('span', `effect-chip${value < 0 ? ' negative' : ''}`, `${id} ${value > 0 ? '+' : ''}${value}`, { title: DATASET.indicators.find((indicator) => indicator.id === id)?.name ?? id }));
-    card.append(effects, node('p', 'project-card-meta', `Base effects · ${measure.lag}-quarter delay · ${measure.scope === 'city' ? 'City-wide' : 'One district'}`));
-    const action = button(selected ? `✓ ${districtName(selected.districtId)} · Remove` : `Add ${measure.scope === 'city' ? 'city-wide' : `to ${districtName(districtId)}`} +`, 'add-project', () => {
-      if (selected) editPlan(state.selections.filter((item) => item.measureId !== measure.id));
-      else {
-        const checked = validatePlan([...state.selections, { measureId: measure.id, districtId: measure.scope === 'city' ? null : state.districtId }], { allowPartial: true });
-        if (!checked.valid) { message(checked.errors.map((error) => error.message).join(' '), true); return; }
-        editPlan([...state.selections, { measureId: measure.id, districtId: measure.scope === 'city' ? null : state.districtId }]);
-      }
-    }, { 'aria-label': selected ? `Remove ${measure.name}` : `Add ${measure.name} ${measure.scope === 'city' ? 'city-wide' : `in ${districtName(districtId)}`}`, 'data-focus': `project-${measure.id}` });
-    action.disabled = !selected && !validation.valid;
-    card.append(action);
-    if (!selected && !validation.valid) card.append(node('p', 'blocked-reason', state.selections.length >= 5 ? 'Remove a project to make room.' : validation.errors.map((error) => error.message).join(' ')));
-    fragment.append(card);
-  }
-  $('projects').replaceChildren(fragment);
+ const savedScroll=$('projects').scrollLeft;
+ const shortCategories={transport:'Transport',ecology:'Ecology',social:'Social',safety:'Safety',services:'Services'};
+ $('category-filters').replaceChildren(...[{id:'all',name:'All'},...DATASET.categories].map(category=>button(shortCategories[category.id]??category.name,'filter',()=>{state.category=category.id;render();},{'aria-pressed':state.category===category.id,'data-focus':`filter-${category.id}`})));
+ const visible=DATASET.measures.filter(measure=>state.category==='all'||measure.category===state.category);$('project-total').textContent=visible.length;
+ $('projects').replaceChildren(...visible.map(measure=>{
+   const selected=state.selections.find(item=>item.measureId===measure.id), validTargets=(measure.scope==='city'?[null]:DATASET.districts.map(item=>item.id)).some(districtId=>validatePlan([...state.selections,{measureId:measure.id,districtId}],{allowPartial:true}).valid);
+   const card=button('',`project-tile${selected?' selected':''}${state.pending===measure.id?' pending':''}${!selected&&!validTargets?' blocked':''}`,()=>{
+     if(state.run)return;
+     if(selected){showProjectDetail(measure.id);return;}
+     if(!validTargets){showProjectDetail(measure.id);const checked=validatePlan([...state.selections,{measureId:measure.id,districtId:measure.scope==='city'?null:state.districtId}],{allowPartial:true});message(checked.errors.map(error=>error.message).join(' '),true);return;}
+     if(measure.scope==='city'){placeProject(measure.id);return;}
+     state.pending=measure.id;state.view='after';render();showProjectDetail(measure.id);message(`Place ${measure.name}: choose a district on the map.`);
+   },{'aria-label':`${selected?'Inspect':'Choose'} ${measure.name}, ${measure.cost} units`,'aria-pressed':Boolean(selected||state.pending===measure.id),'data-focus':`project-${measure.id}`});
+   card.style.setProperty('--category',categories.get(measure.category).color);card.disabled=Boolean(state.run);
+   const cost=node('span','tile-cost',measure.cost);cost.append(node('small','','units'));
+   card.append(projectArt(measure.id),cost,node('span','tile-name',projectNames[measure.id]),node('span','tile-scope',selected?`✓ ${districtName(selected.districtId)}`:measure.scope==='city'?'City-wide':`District · ${measure.lag}q build`));
+   card.addEventListener('mouseenter',()=>{if(!state.pending)showProjectDetail(measure.id);});card.addEventListener('focus',()=>showProjectDetail(measure.id));return card;
+ }));$('projects').scrollLeft=savedScroll;
 }
 function renderResults(validation) {
   const displayed = effectiveResult();
-  const hasOutcome = state.view === 'a' ? Boolean(state.pinned) : state.view !== 'before' && Boolean(state.applied);
+  const isReplay = Boolean(state.run && state.view === 'after');
+  const hasOutcome = state.view === 'a' ? Boolean(state.pinned) : state.view !== 'before' && Boolean(state.applied || (isReplay && state.run.quarter > 0));
   const baselineView = !hasOutcome;
   const headline = $('headline-result');
-  const caption = node('div', 'result-caption', baselineView ? 'Baseline reference' : state.view === 'a' ? 'Pinned Plan A · official score' : 'Your plan · official score');
+  const caption = node('div', 'result-caption', isReplay && state.run.quarter > 0 ? `Illustrative replay · quarter ${state.run.quarter}` : baselineView ? 'Baseline reference' : state.view === 'a' ? 'Pinned Plan A · official score' : 'Your plan · official score');
   const score = node('div', 'score-line'); score.append(node('strong', 'score-big', fmt(displayed.score)));
   if (hasOutcome) { const delta = displayDelta(displayed.score, BASELINE.score); score.append(node('span', `delta-pill${delta < 0 ? ' negative' : delta === 0 ? ' neutral' : ''}`, signed(delta), { title: `Full-precision change: ${fmt(displayed.score - BASELINE.score, 5)}` })); }
-  const note = node('p', 'baseline-note', baselineView ? 'The city before intervention. This is not your draft plan’s score.' : `Compared with the ${fmt(BASELINE.score)} baseline, after 8 quarters. Changes use unrounded model values.`);
+  const note = node('p', 'baseline-note', isReplay ? 'Illustrative progression, not a policy forecast. The official result is available at quarter 8.' : baselineView ? 'The city before intervention. This is not your draft plan’s score.' : `Compared with the ${fmt(BASELINE.score)} baseline, after 8 quarters. Changes use unrounded model values.`);
   const metrics = node('div', 'summary-metrics');
   const weakest = [...displayed.districts].sort((a, b) => a.score - b.score)[0];
   const weakCard = node('div', 'summary-metric'); weakCard.append(node('span', '', 'Weakest district'), node('strong', '', weakest?.name ?? '—'), node('small', '', `${fmt(weakest?.score)} district index`));
@@ -152,6 +172,7 @@ function renderResults(validation) {
   metrics.append(weakCard, criticalCard); headline.replaceChildren(caption, score, note, metrics);
   const validationBox = $('validation');
   if (state.view === 'a' && state.pinned) validationBox.replaceChildren(node('p', 'valid-message', `✓ Pinned Plan A · ${state.pinned.result.cost} / ${DATASET.budget} units · 5 projects`));
+  else if (state.run) validationBox.replaceChildren(node('p', 'valid-message', `Construction replay · quarter ${state.run.quarter} / 8. Official result at quarter 8.`));
   else if (state.applied) validationBox.replaceChildren(node('p', 'valid-message', `✓ Valid plan · ${state.applied.result.cost} / ${DATASET.budget} units · 5 projects`));
   else if (validation.valid) validationBox.replaceChildren(node('p', 'valid-message', '✓ Your five-project plan is ready. Simulate to see its impact.'));
   else {
@@ -199,7 +220,8 @@ function renderProjectChanges(mode) {
   const entries = compared && (added.length||removed.length) ? [...added.map(selection=>({selection,view:'after',prefix:'+'})),...removed.map(selection=>({selection,view:'a',prefix:'−'}))] : current.map(selection=>({selection,view:mode==='a'?'a':'after',prefix:''}));
   for (const {selection,view,prefix} of entries) {
     const measure = measures.get(selection.measureId);
-    const chip = button('', `project-focus-chip${view === 'a' && prefix ? ' previous' : ''}`, () => { if(state.view!==view){state.view=view;render();}city?.focusProject(selection.measureId, selection.districtId); }, { 'aria-label': `Focus ${measure.name} ${selection.districtId ? `in ${districtName(selection.districtId)}` : 'city-wide'}${prefix ? view==='a'?' in Plan A':' in your current plan':''}`, 'data-focus': `focus-${measure.id}-${view}` });
+    const chip = button('', `project-focus-chip${view === 'a' && prefix ? ' previous' : ''}`, () => { if(state.view!==view){state.view=view;render();}city?.focusProject(selection.measureId, selection.districtId); $('report-dialog').close(); }, { 'aria-label': `Focus ${measure.name} ${selection.districtId ? `in ${districtName(selection.districtId)}` : 'city-wide'}${prefix ? view==='a'?' in Plan A':' in your current plan':''}`, 'data-focus': `focus-${measure.id}-${view}` });
+    chip.disabled = Boolean(state.run);
     const dot = node('span', 'category-dot'); dot.style.setProperty('--category', categories.get(measure.category)?.color ?? '#327857');
     chip.append(dot,node('span','',`${prefix?prefix+' ':''}${measure.name}`),node('small','',districtName(selection.districtId)));
     const contribution = (view === 'a' ? state.pinned?.result : state.applied?.result)?.contributions?.find((item) => item.measureId === measure.id);
@@ -217,10 +239,10 @@ function render() {
   $('spent').textContent = String(validation.cost); $('remaining').textContent = `${validation.remaining} units ${validation.remaining >= 0 ? 'available' : 'over budget'}`;
   $('budget-fill').style.width = `${Math.min(100, validation.cost / DATASET.budget * 100)}%`;
   const track = $('budget-fill').parentElement; track.setAttribute('aria-valuenow', Math.min(DATASET.budget, validation.cost)); track.classList.toggle('over', validation.remaining < 0);
-  $('slot-count').textContent = `${state.selections.length} / 5 selected`;
-  $('apply-plan').disabled = !validation.valid || Boolean(state.applied);
-  $('apply-plan').firstElementChild.textContent = state.applied ? 'City simulated' : 'Simulate my city';
-  $('plan-hint').textContent = state.applied ? 'Change a choice to try another future' : validation.valid ? 'Ready to see your city change' : `${5 - state.selections.length} ${5 - state.selections.length === 1 ? 'choice' : 'choices'} left to make`;
+  $('slot-count').textContent = `${state.selections.length} / 5`;
+  $('apply-plan').disabled = !validation.valid || Boolean(state.applied) || Boolean(state.run);
+  $('apply-plan').firstElementChild.textContent = state.run ? `Q${state.run.quarter} / 8` : state.applied ? 'Complete' : 'Start';
+  $('plan-hint').textContent = state.run ? `Quarter ${state.run.quarter} / 8 · illustrative replay` : state.pending ? 'Click a district to place your project.' : state.applied ? 'Change a choice to try another future' : validation.valid ? 'Ready to see your city change' : `${5 - state.selections.length} ${5 - state.selections.length === 1 ? 'choice' : 'choices'} left to make`;
   $('undo').disabled = state.history.length === 0; $('reset-plan').disabled = state.selections.length === 0;
   const activePlan = state.view === 'after' && Boolean(state.applied);
   $('pin-plan').disabled = !activePlan; $('view-a').disabled = !state.pinned;
@@ -229,28 +251,95 @@ function render() {
   $('get-improvement').textContent = state.busy === 'suggest' ? 'Checking changes…' : 'Find one improvement';
   $('export-plan').disabled = !activePlan; $('print-plan').disabled = !activePlan;
   $('adviser-output').hidden = state.view !== 'after'; $('suggestion-output').hidden = state.view !== 'after';
-  $('pause-city').setAttribute('aria-pressed', state.paused); $('pause-city').textContent = state.paused ? 'Resume motion' : 'Pause motion';
+  $('pause-city').setAttribute('aria-pressed', state.paused); $('pause-city').textContent = state.paused ? 'Resume' : 'Pause';
   $('pause-city').disabled = state.reducedMotion;
   if(state.reducedMotion) $('pause-city').textContent = 'Reduced motion';
-  document.querySelectorAll('[data-view]').forEach((item) => item.setAttribute('aria-pressed', item.dataset.view === state.view));
+  document.querySelectorAll('[data-view]').forEach((item) => { item.setAttribute('aria-pressed', item.dataset.view === state.view); item.disabled = Boolean(state.run) || (item.dataset.view === 'a' && !state.pinned); });
+  document.querySelectorAll('[data-speed]').forEach(item => item.setAttribute('aria-pressed', Number(item.dataset.speed) === state.speed));
   $('district-shortcuts').replaceChildren(...DATASET.districts.map((district) => button(district.name, '', () => chooseDistrict(district.id), { 'aria-pressed': district.id === state.districtId, 'data-focus': `district-${district.id}` })));
   renderSlots(); renderProjects(); renderResults(validation);
-  const mode = state.view === 'before' ? 'before' : state.view === 'a' ? 'a' : state.applied ? 'after' : 'draft';
+  const mode = state.view === 'before' ? 'before' : state.view === 'a' ? 'a' : state.applied || state.run ? 'after' : 'draft';
   const highlightKeys = renderProjectChanges(mode);
-  $('scene-state').textContent = { before: 'BASELINE CITY', a: 'PINNED PLAN A', after: 'YOUR FUTURE CITY', draft: state.selections.length ? 'DRAFT · PROJECT PREVIEW' : 'BASELINE CITY' }[mode];
-  $('scene-description').textContent = mode === 'a' ? 'Pinned Plan A. Amber rings mark projects that differ from your current choices.' : mode === 'before' ? 'The city before intervention. Your choices are preserved.' : mode === 'after' ? 'Your validated end-state at 8 quarters. Buildings, road activity and reactions are illustrative; green rings mark changed projects.' : 'Translucent projects are previews. Complete five choices and simulate to calculate official outcomes.';
-  city?.update({ selections: displayedPlan(), result: mode === 'draft' ? null : effectiveResult(), districtId: state.districtId, mode, paused: state.paused, reducedMotion: state.reducedMotion, highlightKeys, indicatorNames: Object.fromEntries(DATASET.indicators.map(indicator=>[indicator.id,indicator.name])), measureNames: Object.fromEntries(DATASET.measures.map(measure=>[measure.id,measure.name])) });
+  $('scene-state').textContent = state.run ? `Q${state.run.quarter} / 8 · ${state.run.quarter ? 'ILLUSTRATIVE REPLAY' : 'BASELINE'}${state.paused ? ' · PAUSED' : ''}` : { before: 'BASELINE CITY', a: 'PINNED PLAN A', after: 'YOUR FUTURE CITY', draft: state.selections.length ? 'DRAFT · PROJECT PREVIEW' : 'BASELINE CITY' }[mode];
+  $('scene-description').textContent = state.run ? `Quarter ${state.run.quarter}: illustrative construction replay. Only quarter 8 is the official outcome.` : mode === 'a' ? 'Pinned Plan A. Amber rings mark projects that differ from your current choices.' : mode === 'before' ? 'The city before intervention. Your choices are preserved.' : mode === 'after' ? 'Your validated end-state at 8 quarters. Buildings, road activity and reactions are illustrative; green rings mark changed projects.' : 'Translucent projects are previews. Complete five choices and simulate to calculate official outcomes.';
+  renderHud(); renderTimeline();
+  city?.update({ replay: state.run ? {quarter:state.run.quarter, completedMeasureIds:state.run.frames[state.run.quarter].completedMeasureIds, running:!state.paused, speed:state.speed} : null, selections: displayedPlan(), result: mode === 'draft' ? null : effectiveResult(), districtId: state.districtId, mode, paused: state.paused, reducedMotion: state.reducedMotion, highlightKeys, indicatorNames: Object.fromEntries(DATASET.indicators.map(indicator=>[indicator.id,indicator.name])), measureNames: Object.fromEntries(DATASET.measures.map(measure=>[measure.id,measure.name])) });
   if (activeFocus) [...document.querySelectorAll('[data-focus]')].find((item) => item.dataset.focus === activeFocus)?.focus({ preventScroll: true });
 }
+function renderHud() {
+ const result=effectiveResult(), replay=Boolean(state.run), official=(state.view==='a'&&state.pinned)||(state.view==='after'&&state.applied);
+ $('report-eyebrow').textContent=replay?`QUARTER ${state.run.quarter} · ILLUSTRATIVE`:official?'QUARTER 8 · COMPLETED':'BASELINE REFERENCE';
+ $('hud-score-label').textContent=replay?'Official at Q8':official?(state.view==='a'?'Plan A · official':'Official score'):'Baseline';
+ $('hud-score').textContent=replay?'—':fmt(result.score);
+ $('hud-weak').textContent=[...result.districts].sort((a,b)=>a.score-b.score)[0]?.name??'—';
+ $('hud-weak-label').textContent=replay?'Weakest · illustrative':official?'Weakest district':'Weakest · baseline';
+ $('hud-critical').textContent=result.criticalCount;
+ $('hud-critical').title=replay?'Illustrative replay count':official?'Official count':'Baseline count';
+ document.querySelector('.world-title').classList.toggle('muted',Boolean(state.selections.length));
+ $('plan-comparison').textContent=state.pinned&&state.applied?`Plan A ${fmt(state.pinned.result.score)} → current plan ${fmt(state.applied.result.score)} · ${signed(state.applied.result.score-state.pinned.result.score)} official score. Cost ${state.pinned.result.cost} → ${state.applied.result.cost}.`:state.pinned?`Plan A is saved at ${fmt(state.pinned.result.score)}. Complete your current run to compare.`:'Pin a completed plan, change one choice, then compare the two futures.';
+ $('voice-controls').hidden=!document.querySelector('.adviser-text')||!official||state.view!=='after';
+}
+function openDialog(id) { document.querySelectorAll('dialog[open]').forEach(item=>{if(item.id!==id)item.close();}); const dialog=$(id); if(!dialog.open)dialog.showModal(); }
 function applyPlan() {
-  const result = simulatePlan(state.selections);
-  if (!result.valid) { message(result.errors.map((error) => error.message).join(' '), true); render(); return; }
-  state.applied = { selections: clone(state.selections), result }; state.view = 'after';
-  message(`Your five decisions are applied. Official score: ${fmt(result.score)} (${signed(displayDelta(result.score, BASELINE.score))} vs baseline).`);
-  render();
+ const timeline=timelinePlan(state.selections);
+ if(!timeline.valid){message(timeline.errors.map(error=>error.message).join(' '),true);render();return;}
+ invalidateAdvice();state.pending=null;state.peek=null;$('project-peek').hidden=true;
+ state.timeline=timeline.frames;state.run={frames:timeline.frames,quarter:0,elapsed:0,lastTick:performance.now(),selections:clone(state.selections)};
+ state.applied=null;state.view='after';state.paused=state.reducedMotion;
+ document.querySelectorAll('dialog[open]').forEach(dialog=>dialog.close());
+ message('Construction started. Quarter 1–7 is illustrative; the official result arrives at quarter 8.');render();
+ if(state.reducedMotion)finishRun();
+}
+function finishRun() {
+ if(!state.run)return;
+ const run=state.run;state.applied={selections:clone(run.selections),result:run.frames.at(-1).result};state.run=null;state.view='after';
+ $('report-eyebrow').textContent='QUARTER 8 · COMPLETED';
+ message(`City complete · official score ${fmt(state.applied.result.score)} · ${signed(state.applied.result.score-BASELINE.score)} versus baseline.`);
+ render();openDialog('report-dialog');
+}
+setInterval(()=>{
+ const run=state.run;if(!run)return;const now=performance.now(),elapsed=Math.min(500,now-run.lastTick);run.lastTick=now;
+ if(state.paused||document.hidden)return;
+ run.elapsed+=elapsed*state.speed;const quarter=Math.min(8,Math.floor(run.elapsed/1800));
+ if(quarter===8){finishRun();return;}if(quarter!==run.quarter){run.quarter=quarter;render();}
+},100);
+function renderTimeline() {
+ const host=$('timeline-chart'),tableHost=$('timeline-table');
+ if(!state.timeline){host.replaceChildren();tableHost.replaceChildren();$('timeline-notice').textContent='Start a valid five-project plan to see its construction replay.';return;}
+ const frames=state.timeline.slice(0,state.run?state.run.quarter+1:9),colors=['#327857','#238a9a','#8a73b8','#b37a25','#587ea0','#b44848'];
+ $('timeline-notice').textContent='Current run: quarter 0 is baseline; quarters 1–7 are illustrative, not forecasts. Only quarter 8 is the official result.';
+ const series=[{name:'City index',values:frames.map(frame=>frame.result.score)},...DATASET.districts.map(district=>({name:district.name,values:frames.map(frame=>frame.result.districts.find(item=>item.id===district.id).score)}))];
+ const values=series.flatMap(item=>item.values),low=Math.floor(Math.min(...values))-2,high=Math.ceil(Math.max(...values))+2;
+ const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 560 240');svg.setAttribute('role','img');svg.setAttribute('aria-label','City and district indices by quarter. Exact values are in the following table.');
+ const add=(tag,attrs,text)=>{const el=document.createElementNS(svg.namespaceURI,tag);for(const [name,value]of Object.entries(attrs))el.setAttribute(name,value);if(text!==undefined)el.textContent=text;svg.append(el);};
+ for(let i=0;i<5;i++){const value=low+(high-low)*i/4,y=205-(value-low)/(high-low)*178;add('line',{x1:38,x2:545,y1:y,y2:y,stroke:'#e1e8dc'});add('text',{x:31,y:y+3,'text-anchor':'end',fill:'#5f716b','font-size':10},fmt(value,0));}
+ for(let q=0;q<=8;q++)add('text',{x:42+q*61,y:226,'text-anchor':'middle',fill:'#5f716b','font-size':10},`Q${q}`);
+ series.forEach((item,index)=>{const points=item.values.map((value,q)=>`${42+q*61},${205-(value-low)/(high-low)*178}`).join(' ');add('polyline',{points,fill:'none',stroke:colors[index],'stroke-width':index?1.6:3,'stroke-dasharray':index?'4 3':'none'});const q=item.values.length-1;add('circle',{cx:42+q*61,cy:205-(item.values[q]-low)/(high-low)*178,r:index?2.5:4,fill:colors[index]});});
+ const legend=node('div','chart-legend');series.forEach((item,index)=>{const label=node('span','',item.name),dot=node('i');dot.style.background=colors[index];label.prepend(dot);legend.append(label);});host.replaceChildren(svg,legend);
+ const table=node('table'),caption=node('caption','sr-only','Quarterly replay values'),head=node('thead'),tr=node('tr');tr.append(node('th','','Quarter'),...series.map(item=>node('th','',item.name)));head.append(tr);const body=node('tbody');
+ frames.forEach((frame,q)=>{const row=node('tr');row.append(node('th','',q===0?'Q0 baseline':q===8?'Q8 official':`Q${q} illustrative`),...series.map(item=>node('td','',fmt(item.values[q]))));body.append(row);});table.append(caption,head,body);tableHost.replaceChildren(table);
+}
+function stopVoice() {
+ state.speechRequest?.abort();state.speechRequest=null;state.speech?.pause();state.speech=null;if(state.speechUrl)URL.revokeObjectURL(state.speechUrl);state.speechUrl=null;
+ if('speechSynthesis'in window)window.speechSynthesis.cancel();if($('stop-voice'))$('stop-voice').disabled=true;if($('read-briefing'))$('read-briefing').disabled=false;
+}
+async function readBriefing() {
+ const text=document.querySelector('.adviser-text')?.textContent;if(!text||!state.applied)return;stopVoice();
+ const revision=state.revision,controller=new AbortController();state.speechRequest=controller;$('read-briefing').disabled=true;$('stop-voice').disabled=false;$('voice-status').textContent='Preparing AI-generated voice · displayed briefing is the transcript.';
+ const timeout=setTimeout(()=>controller.abort(),30000);
+ try{
+   const response=await fetch('/api/speech',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text}),signal:controller.signal});if(!response.ok)throw new Error('Speech unavailable');
+   const blob=await response.blob();if(state.speechRequest!==controller||revision!==state.revision)return;
+   state.speechUrl=URL.createObjectURL(blob);state.speech=new Audio(state.speechUrl);state.speech.addEventListener('ended',()=>{stopVoice();$('voice-status').textContent='AI-generated voice · reading complete.';});await state.speech.play();$('voice-status').textContent='AI-generated voice · displayed briefing is the transcript.';
+ }catch(error){
+   if(state.speechRequest!==controller||revision!==state.revision)return;
+   if('speechSynthesis'in window){const utterance=new SpeechSynthesisUtterance(text);utterance.lang='en';utterance.onend=()=>{stopVoice();$('voice-status').textContent='Browser voice · reading complete.';};utterance.onerror=()=>{stopVoice();$('voice-status').textContent='Audio unavailable. The complete briefing remains above.';};window.speechSynthesis.speak(utterance);$('voice-status').textContent='Browser voice fallback · displayed briefing is the transcript.';}
+   else{stopVoice();$('voice-status').textContent='Audio unavailable. The complete briefing remains above.';}
+ }finally{clearTimeout(timeout);}
 }
 async function requestAnalysis(kind) {
   if (!state.applied || state.busy) return;
+  stopVoice();
   const revision = state.revision, currentKey = key(state.selections), controller = new AbortController();
   state.request = controller; state.busy = kind; state.suggestion = null; $('suggestion-output').replaceChildren();
   $('adviser-output').textContent = kind === 'advice' ? 'Reading your calculated outcomes…' : 'Checking every eligible one-project change…'; render();
@@ -297,15 +386,22 @@ function showSuggestion(data) {
   $('suggestion-output').replaceChildren(card);
 }
 function bindControls() {
+  document.querySelectorAll('[data-open]').forEach(item=>item.addEventListener('click',()=>openDialog(item.dataset.open)));
+  document.querySelectorAll('[data-close]').forEach(item=>item.addEventListener('click',()=>item.closest('dialog').close()));
+  $('report-dialog').addEventListener('close',stopVoice);
+  document.querySelectorAll('[data-speed]').forEach(item=>item.addEventListener('click',()=>{state.speed=Number(item.dataset.speed);render();}));
+  $('close-peek').addEventListener('click',()=>{state.pending=null;state.peek=null;$('project-peek').hidden=true;message();render();});
+  $('place-current').addEventListener('click',()=>{const selected=state.selections.some(item=>item.measureId===state.peek);if(selected)editPlan(state.selections.filter(item=>item.measureId!==state.peek));else if(state.pending)placeProject(state.pending);});
+  $('read-briefing').addEventListener('click',readBriefing);$('stop-voice').addEventListener('click',()=>{stopVoice();$('voice-status').textContent='Reading stopped. The complete briefing remains above.';});
   $('target-district').append(...DATASET.districts.map((district) => node('option', '', district.name, { value: district.id })));
   $('target-district').value = state.districtId; $('target-district').disabled = false;
   $('target-district').addEventListener('change', () => chooseDistrict($('target-district').value));
-  $('load-example').disabled = false; $('load-example').addEventListener('click', () => { editPlan(EXAMPLE_PLAN); message('The supplied example is ready: five projects, 95 units. Simulate to see the result.'); });
+  $('load-example').disabled = false; $('load-example').addEventListener('click', () => { editPlan(EXAMPLE_PLAN); message('The supplied example is ready: five projects, 95 units. Press Start to build your city.'); });
   $('reset-plan').addEventListener('click', () => editPlan([]));
   $('undo').addEventListener('click', () => { const previous = state.history.pop(); if (previous) { state.locks = new Set(previous.locks); editPlan(previous.selections, { remember: false }); } });
   $('apply-plan').addEventListener('click', applyPlan);
   $('pin-plan').addEventListener('click', () => { if (state.applied) { state.pinned = clone(state.applied); saveLocal(); message('Plan A is pinned. Edit your choices to explore Plan B; switch views without moving the camera.'); render(); } });
-  document.querySelectorAll('[data-view]').forEach((item) => item.addEventListener('click', () => { if (item.dataset.view === 'a' && !state.pinned) return; state.view = item.dataset.view; render(); }));
+  document.querySelectorAll('[data-view]').forEach((item) => item.addEventListener('click', () => { if (item.dataset.view === 'a' && !state.pinned) return; stopVoice(); state.view = item.dataset.view; render(); }));
   $('pause-city').addEventListener('click', () => { state.paused = !state.paused; render(); });
   $('reset-view').addEventListener('click', () => city?.resetView());
   $('get-advice').addEventListener('click', () => requestAnalysis('advice'));
@@ -321,7 +417,7 @@ function bindControls() {
 async function boot() {
   // The planner must still boot if the separate 3D module cannot load.
   const sceneReady = import('./city.js').then(({ createCity }) => {
-    city = createCity({ canvasHost: $('city-canvas'), labelsHost: $('city-labels'), reactionsHost: $('city-reactions'), fallbackHost: $('city-fallback'), loadingHost: $('scene-loading'), onDistrictSelect: (id) => chooseDistrict(id), onCredit: (text) => { $('geography-credit').textContent = text; } });
+    city = createCity({ canvasHost: $('city-canvas'), labelsHost: $('city-labels'), reactionsHost: $('city-reactions'), fallbackHost: $('city-fallback'), loadingHost: $('scene-loading'), onDistrictSelect: (id) => chooseDistrict(id), onDistrictHover: (id) => { $('hover-district').textContent = id === 'sarayshyk' ? 'Sarayshyk · outside scenario' : id ? districtName(id) : ''; }, onCredit: (text, attributionUrl) => { $('geography-credit').textContent = text; if(attributionUrl) { try { const url=new URL(attributionUrl); if(['https:','http:'].includes(url.protocol)) $('geography-credit').append(document.createTextNode(' '),node('a','','Map source and attribution',{href:url.href,target:'_blank',rel:'noopener noreferrer'})); } catch { /* Keep the provided credit text if its optional URL is malformed. */ } } } });
     return city.ready.then(() => render());
   }).catch((error) => {
     $('scene-loading').hidden = true; $('city-fallback').hidden = false;
@@ -330,7 +426,7 @@ async function boot() {
   });
   try {
     const [dataModule, simulationModule] = await Promise.all([import('/shared/city-data.js'), import('/shared/simulation.js')]);
-    ({ DATASET, EXAMPLE_PLAN } = dataModule); ({ BASELINE, validatePlan, simulatePlan } = simulationModule);
+    ({ DATASET, EXAMPLE_PLAN } = dataModule); ({ BASELINE, validatePlan, simulatePlan, timelinePlan } = simulationModule);
     measures = new Map(DATASET.measures.map((measure) => [measure.id, measure])); districts = new Map(DATASET.districts.map((district) => [district.id, district])); categories = new Map(DATASET.categories.map((category) => [category.id, category]));
     try {
       const saved = JSON.parse(localStorage.getItem(storageKey) ?? 'null');
@@ -339,7 +435,7 @@ async function boot() {
         if (saved.pinned && simulatePlan(saved.pinned).valid) state.pinned = { selections: clone(saved.pinned), result: simulatePlan(saved.pinned) };
       }
     } catch { /* Ignore an unavailable or obsolete saved plan. */ }
-    bindControls(); render(); $('app').setAttribute('aria-busy', 'false'); message(state.selections.length ? 'Your saved draft is restored. Simulate to recalculate its outcomes.' : 'Start with a district and five projects — or try the supplied example.');
+    bindControls(); render(); $('app').setAttribute('aria-busy', 'false'); message(state.selections.length ? 'Your saved draft is restored. Press Start to recalculate its outcomes.' : 'Choose a project card, then its district — or try the example.');
     void sceneReady;
   } catch (error) {
     $('app').setAttribute('aria-busy', 'false'); message('The city calculation model could not load. Your browser has not calculated a score. Reload to retry.', true);
