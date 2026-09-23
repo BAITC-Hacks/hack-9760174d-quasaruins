@@ -1,7 +1,8 @@
 /**
  * Akim Lab language switch: Қазақша / Русский / English.
  *
- * Self-contained module. It adds a ҚАЗ · РУС · ENG control to the HUD and translates the rendered UI in place.
+ * Self-contained module. It adds one language button to the HUD (each click cycles ҚАЗ → РУС → ENG) and translates
+ * the rendered UI in place.
  * Text is matched by its exact English wording, plus a few patterns for strings that carry numbers or names,
  * so app.js, city.js and the shared model keep producing English and need no changes. Unknown text stays in
  * English. A MutationObserver keeps re-rendered cards, HUD values, dialogs and map labels translated.
@@ -510,7 +511,7 @@ export function setLanguage(language) {
   document.title = translate(originalTitle, language);
   visit(document.body);
   observer?.takeRecords();
-  for (const button of document.querySelectorAll('.lang-switch button')) button.setAttribute('aria-pressed', String(button.dataset.lang === language));
+  updateSwitch(language);
   updateGeneratedTextNotice(language);
   observer?.takeRecords();
   window.dispatchEvent(new CustomEvent('akimlab:language', { detail: { language } }));
@@ -534,30 +535,41 @@ function updateGeneratedTextNotice(language) {
   note.textContent = GENERATED_NOTICE[language];
 }
 
+// One button: it shows the current language, and each click moves to the next one (ҚАЗ → РУС → ENG → ҚАЗ).
+function nextLanguage(language) {
+  const index = LANGUAGES.findIndex((item) => item.id === language);
+  return LANGUAGES[(index + 1) % LANGUAGES.length];
+}
+function updateSwitch(language) {
+  const button = document.querySelector('.lang-switch');
+  if (!button) return;
+  const item = LANGUAGES.find((entry) => entry.id === language) ?? LANGUAGES[2], next = nextLanguage(language);
+  button.querySelector('.lang-current').textContent = item.label;
+  button.dataset.lang = item.id;
+  button.title = `${item.name} → ${next.name}`;
+  button.setAttribute('aria-label', `Тіл · Язык · Language: ${item.name}. → ${next.name}`);
+}
 function mountSwitch() {
   const style = document.createElement('style');
-  style.textContent = `.lang-switch{display:inline-flex;align-items:center;gap:2px;padding:3px;border:1px solid var(--border,#d9e2d5);border-radius:9px;background:#fff;flex-shrink:0}
-.lang-switch button{border:0;background:transparent;font:inherit;font-size:11px;font-weight:600;letter-spacing:.02em;min-height:27px;min-width:38px;padding:4px 7px;border-radius:6px;color:var(--muted,#667c68);cursor:pointer}
-.lang-switch button:hover{color:var(--text,#24372b)}
-.lang-switch button[aria-pressed=true]{background:var(--primary,#2f6f4f);color:#fff}
+  style.textContent = `.lang-switch{display:inline-flex;align-items:center;gap:6px;min-height:33px;padding:5px 11px;border:1px solid var(--border,#d9e2d5);border-radius:9px;background:#fff;color:var(--text,#24372b);font:inherit;font-size:12px;font-weight:650;letter-spacing:.03em;cursor:pointer;flex-shrink:0}
+.lang-switch:hover{border-color:var(--primary,#2f6f4f);color:var(--primary,#2f6f4f)}
+.lang-switch .lang-globe{font-size:14px;line-height:1}
+.lang-switch .lang-dots{display:inline-flex;gap:3px;margin-left:2px}
+.lang-switch .lang-dots i{width:5px;height:5px;border-radius:50%;background:#cfd8cc}
+.lang-switch[data-lang=kk] .lang-dots i:nth-child(1),.lang-switch[data-lang=ru] .lang-dots i:nth-child(2),.lang-switch[data-lang=en] .lang-dots i:nth-child(3){background:var(--primary,#2f6f4f)}
 .lang-note{font-size:11px;line-height:1.45;color:var(--muted,#667c68);margin:8px 0 4px}
 .lang-switch.floating{position:fixed;top:12px;right:12px;z-index:1000;box-shadow:0 4px 18px #304d3318}
-@media(max-width:760px){.lang-switch button{min-width:31px;min-height:25px;font-size:10px;padding:3px 5px}}`;
+@media(max-width:760px){.lang-switch{min-height:29px;padding:3px 8px;font-size:11px}}`;
   document.head.append(style);
-  const box = document.createElement('div');
-  box.className = 'lang-switch';
-  box.setAttribute('role', 'group');
-  box.setAttribute('aria-label', 'Тіл · Язык · Language');
-  box.dataset.i18nSkip = '';
-  for (const item of LANGUAGES) {
-    const button = document.createElement('button');
-    button.type = 'button'; button.textContent = item.label; button.lang = item.id; button.title = item.name;
-    button.dataset.lang = item.id; button.setAttribute('aria-pressed', 'false');
-    button.addEventListener('click', () => setLanguage(item.id));
-    box.append(button);
-  }
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'lang-switch';
+  button.dataset.i18nSkip = '';
+  button.innerHTML = '<span class="lang-globe" aria-hidden="true">🌐</span><span class="lang-current"></span><span class="lang-dots" aria-hidden="true"><i></i><i></i><i></i></span>';
+  button.addEventListener('click', () => setLanguage(nextLanguage(current).id));
   const host = document.querySelector('.hud-nav') ?? document.querySelector('.hud');
-  if (host) host.append(box); else { box.classList.add('floating'); document.body.append(box); }
+  if (host) host.append(button); else { button.classList.add('floating'); document.body.append(button); }
+  updateSwitch(current);
 }
 
 function start() {
