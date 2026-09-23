@@ -602,7 +602,7 @@ function bindControls() {
 }
 async function boot() {
   // The planner must still boot if the separate 3D module cannot load.
-  const sceneReady = import('./city.js?v=20260923-final1222').then(({ createCity }) => {
+  const sceneReady = import('./city.js?v=20260923-polish1249').then(({ createCity }) => {
     city = createCity({ canvasHost: $('city-canvas'), labelsHost: $('city-labels'), reactionsHost: $('city-reactions'), fallbackHost: $('city-fallback'), loadingHost: $('scene-loading'), onDistrictSelect: (id) => chooseDistrict(id), onDistrictHover: (id) => { $('hover-district').textContent = id === 'sarayshyk' ? 'Sarayshyk · outside scenario' : id ? districtName(id) : ''; }, onCredit: (text, attributionUrl) => { $('geography-credit').textContent = text; if(attributionUrl) { try { const url=new URL(attributionUrl); if(['https:','http:'].includes(url.protocol)) $('geography-credit').append(document.createTextNode(' '),node('a','','Map source and attribution',{href:url.href,target:'_blank',rel:'noopener noreferrer'})); } catch { /* Keep the provided credit text if its optional URL is malformed. */ } } } });
     return city.ready.then(() => render());
   }).catch((error) => {

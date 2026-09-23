@@ -1,5 +1,5 @@
 /** Geographic presentation only. All policy effects and scores come from the shared evaluator. */
-import { createCityDetails } from './city-details.js?v=20260923-final1220';
+import { createCityDetails } from './city-details.js?v=20260923-polish1249';
 import { makeTrack, sampleTrack } from './city-motion.js';
 import { createProjectEffects } from './city-project-effects.js?v=20260923-final1220';
 import { BASELINE } from '../shared/simulation.js';
