@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DATASET, EXAMPLE_PLAN } from '../shared/city-data.js';
-import { BASELINE, validatePlan, simulatePlan } from '../shared/simulation.js';
+import { BASELINE, validatePlan, simulatePlan, timelinePlan } from '../shared/simulation.js';
 import { suggestPlan } from '../shared/optimizer.js';
 const close=(actual,expected)=>assert.ok(Math.abs(actual-expected)<1e-9,`${actual} != ${expected}`);
 
@@ -66,4 +66,32 @@ test('all-locked and invalid plans cannot generate suggestions',()=>{
     assert.equal(suggestPlan(EXAMPLE_PLAN,options).available,false);
   }
   assert.equal(suggestPlan([]).available,false);
+});
+
+test('illustrative replay preserves lags, synergy activation and exact final results',()=>{
+  const timeline=timelinePlan(EXAMPLE_PLAN),frames=timeline.frames;
+  assert.equal(timeline.valid,true);assert.equal(frames.length,9);
+  close(frames[0].result.score,BASELINE.score);close(frames[1].result.score,BASELINE.score);
+  assert.equal(frames[0].official,false);assert.equal(frames[0].illustrative,false);
+  assert.deepEqual(frames[1].completedMeasureIds,['M10','M12']);
+  assert.equal(frames[1].result.synergies.length,0);assert.equal(frames[2].result.synergies.length,1);
+  const nura=q=>frames[q].result.districts.find(d=>d.id==='nura');
+  close(nura(2).indicators.B1,58.5);close(nura(3).indicators.S1,38);close(nura(4).indicators.S1,40);
+  assert.equal(frames[4].result.criticalIndicators.some(x=>x.districtId==='nura'&&x.indicatorId==='S1'),false);
+  for(const frame of frames.slice(1,8)){assert.equal(frame.illustrative,true);assert.equal(frame.official,false);}
+  assert.equal(frames[8].official,true);assert.equal(frames[8].illustrative,false);
+  assert.deepEqual(frames[8].result,simulatePlan(EXAMPLE_PLAN));
+  assert.deepEqual(timelinePlan([...EXAMPLE_PLAN].reverse()),timeline);
+});
+
+test('replay never supplies frames for invalid plans and retains negative trade-offs',()=>{
+  for(const input of [null,[],EXAMPLE_PLAN.slice(1)]) {
+    const result=timelinePlan(input);assert.equal(result.valid,false);assert.deepEqual(result.frames,[]);
+  }
+  const plan=[['M11','almaty'],['M7','nura'],['M8','nura'],['M12',null],['M4','saryarka']]
+    .map(([measureId,districtId])=>({measureId,districtId}));
+  const {frames}=timelinePlan(plan);
+  close(frames[2].result.districts.find(d=>d.id==='almaty').indicators.T1,39.75);
+  assert.ok(frames[2].result.criticalIndicators.some(x=>x.districtId==='almaty'&&x.indicatorId==='T1'));
+  assert.deepEqual(frames[8].result,simulatePlan(plan));
 });

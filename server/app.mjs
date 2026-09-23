@@ -7,6 +7,7 @@ import { DATASET, EXAMPLE_PLAN } from '../shared/city-data.js';
 import { BASELINE, simulatePlan } from '../shared/simulation.js';
 import { suggestPlan, validateLocks } from '../shared/optimizer.js';
 import { getAdvice } from './adviser.mjs';
+import { synthesizeSpeech } from './speech.mjs';
 
 export const ROOT=fileURLToPath(new URL('../',import.meta.url));
 const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8',
@@ -31,9 +32,9 @@ async function readJSON(req) {
   return body;
 }
 
-export function createAppServer({root=ROOT,apiKey=process.env.OPENAI_API_KEY,model=process.env.OPENAI_MODEL||'gpt-4.1-mini',adviceFn=getAdvice}={}) {
-  let activeAdvice=0,geoPromise;
-  const adviceCache=new Map();
+export function createAppServer({root=ROOT,apiKey=process.env.OPENAI_API_KEY,model=process.env.OPENAI_MODEL||'gpt-4.1-mini',adviceFn=getAdvice,speechFn=synthesizeSpeech}={}) {
+  let activeAdvice=0,activeSpeech=0,geoPromise;
+  const adviceCache=new Map(),speechCache=new Map();
   return createServer(async(req,res)=>{
     res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');
     res.setHeader('X-Frame-Options','DENY');
@@ -48,14 +49,37 @@ export function createAppServer({root=ROOT,apiKey=process.env.OPENAI_API_KEY,mod
         if (req.method==='GET' && path==='/api/health') return send(200,{ok:true,aiConfigured:Boolean(apiKey),model,datasetVersion:DATASET.version});
         if (req.method==='GET' && path==='/api/dataset') return send(200,{dataset:DATASET,examplePlan:EXAMPLE_PLAN,baseline:BASELINE});
         if (req.method==='GET' && path==='/api/geography') {
-          geoPromise??=readFile(resolve(root,'data/astana.json')).then(raw=>({raw,gzip:gzipSync(raw)})).catch(error=>{geoPromise=undefined;throw error;});
+          geoPromise??=Promise.all(['astana.json','city-details.json'].map(name=>readFile(resolve(root,'data',name),'utf8')))
+            .then(([baseRaw,detailsRaw])=>{
+              const base=JSON.parse(baseRaw),details=JSON.parse(detailsRaw);
+              const raw=Buffer.from(JSON.stringify({...base,landmarks:details.landmarks,parks:details.parks,
+                credit:base.credit+' '+details.credit,attributionUrl:details.attributionUrl,detailsNotice:details.notice}));
+              return {raw,gzip:gzipSync(raw)};
+            }).catch(error=>{geoPromise=undefined;throw error;});
           const geo=await geoPromise,compressed=/\bgzip\b/.test(req.headers['accept-encoding']||'');
-          res.writeHead(200,{'Content-Type':types['.json'],'Cache-Control':'public, max-age=3600','Vary':'Accept-Encoding',...(compressed?{'Content-Encoding':'gzip'}:{})});
+          res.writeHead(200,{'Content-Type':types['.json'],'Cache-Control':'no-cache','Vary':'Accept-Encoding',...(compressed?{'Content-Encoding':'gzip'}:{})});
           return res.end(compressed?geo.gzip:geo.raw);
         }
-        if (req.method!=='POST' || !['/api/simulate','/api/suggest','/api/advice'].includes(path)) throw fail(404,'API endpoint not found.');
+        if (req.method!=='POST' || !['/api/simulate','/api/suggest','/api/advice','/api/speech'].includes(path)) throw fail(404,'API endpoint not found.');
         if (req.headers.origin && req.headers.origin!==`http://${req.headers.host}`) throw fail(403,'Cross-origin requests are not allowed.');
-        const body=await readJSON(req),result=simulatePlan(body.selections);
+        const body=await readJSON(req);
+        if(path==='/api/speech') {
+          if(typeof body.text!=='string' || !body.text.trim() || body.text.length>4000) throw fail(400,'Speech text must contain 1–4000 characters.');
+          const sendAudio=bytes=>{
+            res.writeHead(200,{'Content-Type':'audio/mpeg','Content-Length':bytes.length,'Cache-Control':'no-store','X-Audio-Source':'AI-generated voice'});
+            res.end(bytes);
+          };
+          const cached=speechCache.get(body.text);
+          if(cached && Date.now()-cached.time<300000)return sendAudio(cached.bytes);
+          if(activeSpeech>=1)throw fail(429,'Voice generation is busy. Please try again shortly.');
+          activeSpeech++;
+          try {
+            const bytes=await speechFn(body.text,{apiKey});
+            if(speechCache.size>=8)speechCache.delete(speechCache.keys().next().value);
+            speechCache.set(body.text,{time:Date.now(),bytes});return sendAudio(bytes);
+          } finally {activeSpeech--;}
+        }
+        const result=simulatePlan(body.selections);
         if(path==='/api/simulate' || !result.valid) return send(result.valid?200:422,result);
         const lockedMeasureIds=body.lockedMeasureIds??[];
         if (!validateLocks(result.selections,lockedMeasureIds)) throw fail(422,'Locks must be unique project IDs in the current plan.');

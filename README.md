@@ -78,7 +78,9 @@ Calls have a 25-second limit, a concurrency bound and a small memory cache. Prov
 - `test/acceptance/`: independent Python oracle and expected fixtures.
 - `tests/`: engine, HTTP, AI boundary and independent acceptance checks.
 
-See [the interface contract](docs/CONTRACT.md), [acceptance criteria](docs/ACCEPTANCE.md) and [map provenance](data/README.md). Endpoints: `/api/health`, `/api/dataset`, `/api/geography`, `/api/simulate`, `/api/suggest`, `/api/advice`. Caller-supplied scores are ignored and recomputed.
+See [the interface contract](docs/CONTRACT.md), [acceptance criteria](docs/ACCEPTANCE.md) and [map provenance](data/README.md). Endpoints: `/api/health`, `/api/dataset`, `/api/geography`, `/api/simulate`, `/api/suggest`, `/api/advice`, `/api/speech`. Caller-supplied scores are ignored and recomputed. The optional speech endpoint returns AI-generated MP3 narration of the supplied briefing, using `gpt-4o-mini-tts`/`cedar`; no key or unavailable service returns a recoverable error. Playback controls and disclosure are frontend responsibilities.
+
+`timelinePlan` supplies an optional construction replay for quarters 0–8. Intermediate values are illustrative (`effect * max(0,quarter-lag)/8`, then active fixed synergies, clipping and the usual score). Only the quarter-eight result is official, and it exactly equals `simulatePlan`. The replay introduces no extra benefits or scoring rules.
 
 ## Verify
 
@@ -91,7 +93,7 @@ Tests compare dataset fields, baseline and reference plans against an independen
 
 ## Geography and limits
 
-The official Astana public geoportal provides the real geographic backdrop. Road and water geometry is simplified for display. Current Astana has six districts; the challenge supplies five synthetic scoring rows. **Sarayshyk is outside this scenario**, without invented metrics or redistributed population shares. Buildings and project sites are illustrative, not surveyed properties. Cars, pedestrians and emoji reactions do not represent real behavior predictions.
+The official Astana public geoportal provides the district, road and water backdrop. Road and water geometry is simplified for display. The geography API also supplies four landmark footprints/positions and three real park boundaries, with municipal and OpenStreetMap sources attributed separately. Current Astana has six districts; the challenge supplies five synthetic scoring rows. **Sarayshyk is outside this scenario**, without invented metrics or redistributed population shares. Ordinary buildings, project sites and landmark vertical forms are illustrative. Cars, pedestrians and emoji reactions do not represent real behavior predictions.
 
 Costs are virtual units. This is not financial ROI, a real traffic model, measured happiness or a validated policy forecast. No individual resident data is used. All geographic source links and processing details are in [data/README.md](data/README.md).
 

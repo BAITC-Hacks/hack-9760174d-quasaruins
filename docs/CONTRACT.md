@@ -34,7 +34,7 @@ All IDs and canonical field names as above. Additional fields allowed. Extract f
 
 ## Simulation (`shared/simulation.js`)
 
-Named exports `BASELINE`, `validatePlan`, `simulatePlan`.
+Named exports `BASELINE`, `validatePlan`, `simulatePlan`, `timelinePlan`.
 
 ```
 validatePlan(selections, {allowPartial=false}={}) => {
@@ -66,6 +66,22 @@ simulatePlan(selections) => {
 
 For invalid plans, score/delta/average/minimum/criticalCount are null and calculated-result arrays are empty. Do not treat invalid plans as baseline or produce a score. Never mutate inputs or DATASET. Validate unknown IDs, duplicate measures, district/city targeting, max five/exact five, budget, max two per category, incompatible pairs. Strict number types are not coerced. The data include the negative T1 effect for M11. Order must not change result. Preserve numeric precision, round only in presentation. Baseline should be independently computed from data. Example cost95 score56.54307.
 
+### Illustrative construction replay
+
+`timelinePlan(selections)` returns `{valid,errors,cost,frames}`. Invalid plans
+have an empty `frames` array. Valid plans have nine frames (quarters 0–8):
+`{quarter,illustrative,official,completedMeasureIds,result}`. `result` has the
+same shape as `simulatePlan`. Quarter 0 is labelled **Baseline**. Quarters 1–7
+are explicitly **Illustrative replay**, never official intermediate forecasts.
+Quarter 8 is the official result and is exactly `simulatePlan(selections)`.
+
+For visual interpolation, a project's effect at quarter q is
+`fullEffect * max(0,q-lag)/8`; a fixed synergy activates only after both projects'
+delays have elapsed (`q > lag` for both). Clipping and score rules are unchanged.
+`completedMeasureIds` marks construction complete at `q >= lag`; benefits begin
+in the following quarter. No frame is created for a partial/invalid plan.
+The frontend must use this function, not independently interpolate scores.
+
 ## Optimization (`shared/optimizer.js`)
 
 Named export `suggestPlan(currentSelections, {lockedMeasureIds=[]}={})` returning `{available,reason,selections,result,method,examined,improvement}`. Input must be a valid five-project plan. Enumerate every single-slot replacement by an eligible measure/district, including relocation of an unlocked district measure. Preserve every locked measure AND its district. Optimize official score; deterministic ties prefer lower cost then canonical measure/district IDs. `method` is `exhaustive-one-change`; this is not a global optimum. Count examined candidates before validity filtering. When improvement exists, available=true, reason=null, selections is a cloned valid plan, result is simulatePlan output and improvement is result.score-current.score. Otherwise available=false, reason explains why, selections/result=null and improvement=0. Invalid plan/unknown locks return available=false with an explanatory reason. Never apply automatically. Global exhaustive optimization is stretch scope only.
@@ -75,9 +91,11 @@ Named export `suggestPlan(currentSelections, {lockedMeasureIds=[]}={})` returnin
 - GET /api/health -> {ok,aiConfigured,model,datasetVersion}
 - GET /api/dataset -> {dataset:DATASET,examplePlan:EXAMPLE_PLAN,baseline:BASELINE}
 - GET /api/geography -> {districts:GeoJSONFeatureCollection,roads:GeoJSONFeatureCollection,water:GeoJSONFeatureCollection,origin:[longitude,latitude],credit:string}. Coordinates WGS84 longitude/latitude. Each district has properties {id,name,modeled}; IDs include the five scoring districts plus sarayshyk with modeled=false. Geometry can be Polygon/MultiPolygon, roads LineString/MultiLineString. Suggested local projection: east=(lon-originLon)*111.32*cos(originLat*pi/180), north=(lat-originLat)*111.32, in kilometers; Three.js x=east,z=-north. Geographic data are a real backdrop; service/building positions are illustrative. Asset preparation is codex-A's task.
+- Geography also includes `landmarks` and `parks` FeatureCollections, `attributionUrl` and `detailsNotice`. Landmark Point properties: `{id,name,model,footprint:GeoJSONPolygon,scored:false,sourceUrl,attribution,licenseUrl?}`. Models are `bayterek`, `khan-shatyr`, `ak-orda`, `peace-palace`. Parks are Polygon/MultiPolygon with `{id,name,scored:false,sourceUrl,attribution,licenseUrl}`. IDs: `botanical-garden`, `central-park`, `presidential-park`. Preserve geography and avoid procedural building placement inside park/landmark footprints; tree placement and 3D vertical forms are decorative. Display the combined `credit` plus a clickable `attributionUrl`. Source attribution applies independently to each layer. Data are offline; no runtime map service is needed.
 - POST /api/simulate body {selections} -> simulation output; invalid plans HTTP422
 - POST /api/suggest body {selections,lockedMeasureIds?:string[]} -> suggestPlan output; invalid current plan/locks HTTP422; valid plan with no improvement HTTP200
 - POST /api/advice body {selections,question?,lockedMeasureIds?:string[],language?:'en'|'ru'} -> {mode:'live'|'offline',text,trace:[{tool,input,summary}],suggestion?:suggestPlanOutput,model?:string}; invalid plan HTTP422
+- POST /api/speech body `{text:string}` -> HTTP200 `audio/mpeg` MP3, `X-Audio-Source: AI-generated voice`. Text must contain 1–4000 characters. Send exactly the visible briefing; play only after a user button press and keep that text available as subtitles. Clearly display **AI-generated voice**. Server uses `gpt-4o-mini-tts`, voice `cedar`, 25-second upstream timeout, one active request and a small five-minute memory cache. On HTTP503 (no key/upstream unavailable), HTTP429 or network failure, offer browser speech or text-only viewing; do not block simulation. Errors use `{error:string}`. The key stays server-side and returned upstream errors are sanitized. Stop/revoke old audio when the briefing or plan changes.
 - Server recalculates all evidence; never trusts user-supplied scores. Key only on server. Same-origin local app, request-size limits, no secrets in responses/logs.
 - Adviser output is an English AI-curated verified briefing: the model selects approved fact IDs, and the server renders those statements plus the exact recommendation. `generation:'ai-selected-verified-facts'` is returned for live output. `language` input is reserved for future localization; this version renders English. Show `mode` clearly. Do not add a language switch yet.
 - General HTTP failures use {error:string}; frontend must handle timeout/network failure and JSON errors. Invalid simulation HTTP422 retains the normal simulation shape. Escape AI text. Discard stale responses after edits.
