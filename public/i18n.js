@@ -511,7 +511,27 @@ export function setLanguage(language) {
   visit(document.body);
   observer?.takeRecords();
   for (const button of document.querySelectorAll('.lang-switch button')) button.setAttribute('aria-pressed', String(button.dataset.lang === language));
+  updateGeneratedTextNotice(language);
+  observer?.takeRecords();
   window.dispatchEvent(new CustomEvent('akimlab:language', { detail: { language } }));
+}
+
+// The adviser briefing and its voice-over are generated in English by the server, so say so next to those controls.
+const GENERATED_NOTICE = {
+  kk: 'AI брифингі мен дауыстық оқу әзірге тек ағылшын тілінде.',
+  ru: 'AI-брифинг и озвучка пока только на английском.',
+};
+function updateGeneratedTextNotice(language) {
+  const anchor = document.getElementById('adviser-output');
+  let note = document.getElementById('i18n-generated-note');
+  if (language === 'en' || !anchor?.parentElement) { note?.remove(); return; }
+  if (!note) {
+    note = document.createElement('p');
+    note.id = 'i18n-generated-note'; note.className = 'lang-note'; note.dataset.i18nSkip = '';
+    anchor.parentElement.insertBefore(note, anchor);
+  }
+  note.lang = language;
+  note.textContent = GENERATED_NOTICE[language];
 }
 
 function mountSwitch() {
@@ -520,6 +540,7 @@ function mountSwitch() {
 .lang-switch button{border:0;background:transparent;font:inherit;font-size:11px;font-weight:600;letter-spacing:.02em;min-height:27px;min-width:38px;padding:4px 7px;border-radius:6px;color:var(--muted,#667c68);cursor:pointer}
 .lang-switch button:hover{color:var(--text,#24372b)}
 .lang-switch button[aria-pressed=true]{background:var(--primary,#2f6f4f);color:#fff}
+.lang-note{font-size:11px;line-height:1.45;color:var(--muted,#667c68);margin:8px 0 4px}
 .lang-switch.floating{position:fixed;top:12px;right:12px;z-index:1000;box-shadow:0 4px 18px #304d3318}
 @media(max-width:760px){.lang-switch button{min-width:31px;min-height:25px;font-size:10px;padding:3px 5px}}`;
   document.head.append(style);
