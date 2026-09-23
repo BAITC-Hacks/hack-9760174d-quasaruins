@@ -118,6 +118,17 @@ def extra_landmarks(source):
         if id_ == 'grand-mosque':
             props['identitySourceUrl'] = 'https://visitastana.kz/en/map/'
         features.append({'type': 'Feature', 'geometry': {'type': 'Point', 'coordinates': point}, 'properties': props})
+    university = next(f for f in read(source, 'nazarbayev-university-official.geojson')['features']
+                      if f['properties']['OBJECTID'] == 47194)
+    assert university['properties']['NAME_OBJECT'] == 'Nazarbayev University'
+    footprint = {'type': 'Polygon', 'coordinates': [[p[:2] for p in r] for r in university['geometry']['coordinates']]}
+    features.append({'type': 'Feature', 'geometry': {'type': 'Point', 'coordinates': centroid(footprint)},
+        'properties': {'id': 'nazarbayev-university', 'name': 'Nazarbayev University',
+            'model': 'nazarbayev-university', 'scored': False, 'footprint': footprint,
+            'sourceName': university['properties']['NAME_OBJECT'], 'sourceUrl': GIS, 'sourceId': 47194,
+            'identitySourceUrl': 'https://nu.edu.kz/visitors/about-campus/',
+            'attribution': 'Astana official public geoportal',
+            'geometryNote': 'Main connected academic building footprint, not the entire campus. Position is its outer-ring centroid; vertical form is stylized.'}})
     return features
 
 
@@ -196,7 +207,7 @@ def main(source):
             'attribution': '© OpenStreetMap contributors', 'licenseUrl': OSM_LICENSE,
             'geometryNote': 'Position is the centroid of the mapped footprint. Vertical form is stylized.'}})
     landmarks.extend(extra_landmarks(source))
-    assert len(landmarks) == 14 and len({f['properties']['id'] for f in landmarks}) == 14
+    assert len(landmarks) == 15 and len({f['properties']['id'] for f in landmarks}) == 15
     details = {'retrieved': '2026-09-23',
         'credit': 'Selected parks, landmarks and LRT geometry © OpenStreetMap contributors (ODbL); other landmark footprints: Astana official public geoportal.',
         'attributionUrl': OSM_LICENSE,
