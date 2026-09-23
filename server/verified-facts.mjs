@@ -39,7 +39,8 @@ export function verifiedFacts(evidence) {
     if(decreases.length)recommendation+=`Compared with the current plan, the trade-offs are: ${decreases.join('; ')}. `;
     recommendation+='This is the best single-project change under the current locks, not a proven global optimum. Apply it only after reviewing the comparison.';
   }
-  return {intro,strengths,risks,recommendation};
+  return {intro,strengths,risks,recommendation,
+    mandatoryRiskIds:risks.filter(f=>f.id==='weakest'||f.id.startsWith('loss_')||f.id.startsWith('critical_')).map(f=>f.id)};
 }
 
 export function factSelectionSchema(facts) {
@@ -56,6 +57,9 @@ export function renderSelectedFacts(facts,selection) {
     if(!Array.isArray(ids)||ids.length<1||ids.length>3||new Set(ids).size!==ids.length)throw new Error('Invalid fact selection.');
     return ids.map(id=>{const fact=source.find(f=>f.id===id);if(!fact)throw new Error('Unverified statement.');return fact.text;});
   };
-  return [facts.intro,selected(selection.strengthIds,facts.strengths).join(' '),
-    selected(selection.riskIds,facts.risks).join(' '),facts.recommendation].join('\n\n');
+  const strengths=selected(selection.strengthIds,facts.strengths);
+  selected(selection.riskIds,facts.risks); // Validate the model's choice before adding mandatory risk disclosures.
+  const riskIds=[...new Set([...facts.mandatoryRiskIds,...selection.riskIds])];
+  const risks=riskIds.map(id=>facts.risks.find(f=>f.id===id).text);
+  return [facts.intro,strengths.join(' '),risks.join(' '),facts.recommendation].join('\n\n');
 }

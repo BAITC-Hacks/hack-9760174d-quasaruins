@@ -96,3 +96,12 @@ test('AI cannot insert invented facts, duplicate statements or extra prose into 
     {strengthIds:[],riskIds:['weakest']},
   ])assert.throws(()=>renderSelectedFacts(facts,invalid));
 });
+
+test('AI fact selection cannot hide an adverse effect or remaining critical indicator',()=>{
+  const plan=[['M11','almaty'],['M7','nura'],['M8','nura'],['M12',null],['M4','saryarka']]
+    .map(([measureId,districtId])=>({measureId,districtId}));
+  const facts=verifiedFacts(buildEvidence(plan));
+  const text=renderSelectedFacts(facts,{strengthIds:['gain_nura_S1'],riskIds:['scope']});
+  assert.match(text,/Almaty: road flow falls by 1\.75 to 38\.25/);
+  assert.match(text,/Almaty still has a critical road flow indicator at 38\.25/);
+});
