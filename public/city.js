@@ -1,4 +1,5 @@
 /** Geographic presentation only. All policy effects and scores come from the shared evaluator. */
+import { createCityDetails } from './city-details.js';
 import { makeTrack, sampleTrack } from './city-motion.js';
 const COLORS = { land: 0xe7ebdd, side: 0xd5deca, outside: 0xe3e5dc, water: 0x82cddd, road: 0xc3cabb, building: 0xf3e9d9, roof: 0xe1d8c9, glass: 0xb8d6d7, green: 0x4b9562, mint: 0xe8f3ed, transport: 0x238a9a, social: 0x8a73b8, safety: 0xb37a25, services: 0x587ea0 };
 const MODES = new Set(['draft', 'before', 'after', 'a']);
@@ -33,7 +34,7 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
   let props = { selections: [], result: null, districtId: 'nura', mode: 'draft', paused: false };
   let signature = '', ready3d = false, disposed = false, frame, resizeObserver, focusTween, home, animationStart = 0, upgrades = [];
   let ambient = [], motionTime = 0, previousFrame = 0, ambientMeshes, reactions = [], lastReactedPlan = '', previousAppliedKeys = new Set();
-  let focusedProject = null, projectFocusLabel, hoveredDistrictId = null, hoverLabel, cityDetails = null;
+  let focusedProject = null, projectFocusLabel, hoveredDistrictId = null, hoverLabel, cityDetails = null, landmarkLabels = [];
   let reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const materials = new Map(), geometries = new Map(), projectSites = new Map();
   const geometry = (id, factory) => { if (!geometries.has(id)) geometries.set(id, factory()); return geometries.get(id); };
@@ -119,6 +120,14 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
     projectFocusLabel=document.createElement('div');projectFocusLabel.className='project-map-focus';projectFocusLabel.hidden=true;labelsHost.append(projectFocusLabel);
     hoverLabel=document.createElement('div');hoverLabel.className='project-map-focus';hoverLabel.hidden=true;
     hoverLabel.style.pointerEvents='none';hoverLabel.style.zIndex='6';labelsHost.append(hoverLabel);
+    landmarkLabels=(cityDetails?.landmarkAnchors??[]).map(anchor=>{
+      const element=document.createElement('button');element.type='button';element.className='district-map-label landmark-map-label';
+      element.textContent=anchor.id==='peace-palace'?'Peace Palace':anchor.name;
+      element.title=`${anchor.name} · mapped location, stylized model`;
+      element.style.background='#fff9e9';element.style.borderColor='#d7c391';element.style.color='#65592f';
+      element.addEventListener('click',()=>focusLandmark(anchor.id));labelsHost.append(element);
+      return {...anchor,element};
+    });
     // Thousands of static source features share two draw objects rather than one per feature.
     const waterVertices=[];
     for(const rings of waterPolygons){const indexed=new THREE.ShapeGeometry(shapeFor(rings));indexed.rotateX(-Math.PI/2);const flat=indexed.toNonIndexed();for(const value of flat.attributes.position.array)waterVertices.push(value);flat.dispose();indexed.dispose();}
@@ -139,7 +148,9 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
         const point = [base[0] + (random() - .5) * .55, base[1] + (random() - .5) * .55];
         if (!buildableAt(point, district) || district.buildings.some((other) => Math.hypot(other[0] - point[0], other[1] - point[1]) < .35)) continue;
         district.buildings.push(point);
-        buildingData.push({ x: point[0], z: -point[1], width: .18 + random() * .22, depth: .18 + random() * .3, height: .3 + random() ** 2 * 1.25 });
+        // Procedural filler must not hide the real landmarks behind tall blocks.
+        const nearLandmark=cityDetails?.landmarkAnchors.some(anchor=>Math.hypot(point[0]-anchor.position[0],point[1]+anchor.position[2])<1.25);
+        buildingData.push({ x: point[0], z: -point[1], width: .18 + random() * .22, depth: .18 + random() * .3, height: nearLandmark?.18+random()*.2:.3+random()**2*1.25 });
         if (i % 2 === 0) { const green = [point[0] + .3, point[1] + .2]; if (buildableAt(green, district,.2)) treeData.push([green[0], -green[1]]); }
       }
     }
@@ -340,6 +351,12 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
       district.label.hidden=hidden;
       if(!hidden){district.label.style.left=`${x}px`;district.label.style.top=`${y}px`;occupied.push(rect);}
     }
+    for(const landmark of landmarkLabels){
+      const point=new THREE.Vector3(...landmark.position).project(camera),x=(point.x+1)/2*width,y=(1-point.y)/2*height-20;
+      const labelWidth=Math.min(180,landmark.element.textContent.length*6+20),rect={left:x-labelWidth/2,right:x+labelWidth/2,top:y-13,bottom:y+13};
+      const hidden=camera.zoom<2||rect.left<8||rect.right>width-8||rect.top<65||rect.bottom>height-40||occupied.some(other=>rect.left<other.right+4&&rect.right>other.left-4&&rect.top<other.bottom+4&&rect.bottom>other.top-4);
+      landmark.element.hidden=hidden;if(!hidden){landmark.element.style.left=`${x}px`;landmark.element.style.top=`${y}px`;occupied.push(rect);}
+    }
     if(projectFocusLabel){const group=focusedProject&&upgrades.find(item=>item.userData.measureId===focusedProject.measureId&&item.userData.districtId===focusedProject.districtId);projectFocusLabel.hidden=!group;if(group){const point=group.position.clone().add(new THREE.Vector3(0,1.25,0)).project(camera),x=(point.x+1)/2*width,y=(1-point.y)/2*height;projectFocusLabel.textContent=`${props.measureNames?.[focusedProject.measureId]??focusedProject.measureId} · ${districtRecords.find(item=>item.id===focusedProject.districtId)?.name??''}`;projectFocusLabel.style.left=`${x}px`;projectFocusLabel.style.top=`${y}px`;projectFocusLabel.hidden=x<110||x>width-110||y<70||y>height-40;}}
   }
   function resize() {
@@ -359,6 +376,10 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
     focusedProject=null;
     const district=districtRecords.find((item)=>item.id===id);
     if(district&&ready3d)moveCamera(new THREE.Vector3(district.anchor[0],0,-district.anchor[1]),Math.min(3.3,Math.max(1.6,home.span/13)));
+  }
+  function focusLandmark(id){
+    const anchor=cityDetails?.landmarkAnchors.find(item=>item.id===id);
+    if(anchor&&ready3d){focusedProject=null;moveCamera(new THREE.Vector3(anchor.position[0],0,anchor.position[2]),5.6);}
   }
   function focusProject(measureId,districtId){
     if(!ready3d){onDistrictSelect(districtId??props.districtId);return;}
@@ -398,12 +419,13 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
         fetch('/api/geography',{signal:controller.signal}).then(response=>{if(!response.ok)throw new Error('Geographic backdrop is unavailable');return response.json();}),
         import('three'),import('/vendor/OrbitControls.js')
       ]);
-      if(resources[0].status==='fulfilled'){geography=resources[0].value;preprocess();onCredit(geography.credit);}
+      if(resources[0].status==='fulfilled'){geography=resources[0].value;preprocess();onCredit(geography.credit,geography.attributionUrl);}
       if(new URLSearchParams(location.search).get('view')==='2d'){drawFallback();return;}
       if(resources[0].status==='rejected'||resources[1].status==='rejected'||resources[2].status==='rejected')throw new Error('Map assets or 3D library unavailable');
       THREE=resources[1].value;({OrbitControls}=resources[2].value);
       scene=new THREE.Scene();camera=new THREE.OrthographicCamera(-20,20,20,-20,.01,500);renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:'high-performance'});renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.5));renderer.setClearColor(0xf2f5e9,0);renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;canvasHost.append(renderer.domElement);
       controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.dampingFactor=.1;controls.minPolarAngle=Math.PI*.20;controls.maxPolarAngle=Math.PI*.37;controls.minZoom=.65;controls.maxZoom=6;controls.enablePan=true;controls.rotateSpeed=.5;controls.zoomSpeed=.8;controls.addEventListener('start',()=>{focusTween=null;});
+      cityDetails=createCityDetails({THREE,geography,project,groundY:.146});scene.add(cityDetails.group);
       buildGeography();ready3d=true;raycaster=new THREE.Raycaster();
       let pointerStart,lastHoverTime=0;
       const districtAtPointer=event=>{
@@ -422,10 +444,12 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
       });
       renderer.domElement.addEventListener('pointerleave',()=>{pointerStart=null;setHoveredDistrict(null);});
       renderer.domElement.addEventListener('webglcontextlost',event=>{event.preventDefault();ready3d=false;cancelAnimationFrame(frame);drawFallback();});
-      resizeObserver=new ResizeObserver(resize);resizeObserver.observe(canvasHost);resize();updateSelection();updateUpgrades();focusDistrict(props.districtId);frame=requestAnimationFrame(tick);
+      resizeObserver=new ResizeObserver(resize);resizeObserver.observe(canvasHost);resize();updateSelection();updateUpgrades();
+      if(cityDetails.landmarkAnchors.length)focusLandmark('bayterek');else focusDistrict(props.districtId);
+      frame=requestAnimationFrame(tick);
     } catch(error) { ready3d=false;console.warn('Using district fallback:',error.stack ?? error.message);drawFallback(); }
     finally {clearTimeout(timeout);loadingHost.hidden=true;}
   }
-  const api={ready:null,update(next){props={...props,...next};if(typeof next.reducedMotion==='boolean')reducedMotion=next.reducedMotion;if(!MODES.has(props.mode))props.mode='draft';if(props.mode!=='after'||props.paused)clearReactions();if(reducedMotion&&focusTween){controls.target.copy(focusTween.toTarget);camera.position.copy(focusTween.toPosition);camera.zoom=focusTween.toZoom;camera.updateProjectionMatrix();focusTween=null;}updateSelection();updateUpgrades();},focusDistrict,focusProject,resetView:()=>resetView(),dispose(){disposed=true;clearReactions();cancelAnimationFrame(frame);resizeObserver?.disconnect();controls?.dispose();renderer?.dispose();materials.forEach(item=>item.dispose());geometries.forEach(item=>item.dispose());}};
+  const api={ready:null,update(next){props={...props,...next};if(typeof next.reducedMotion==='boolean')reducedMotion=next.reducedMotion;if(!MODES.has(props.mode))props.mode='draft';if(props.mode!=='after'||props.paused)clearReactions();if(reducedMotion&&focusTween){controls.target.copy(focusTween.toTarget);camera.position.copy(focusTween.toPosition);camera.zoom=focusTween.toZoom;camera.updateProjectionMatrix();focusTween=null;}updateSelection();updateUpgrades();},focusDistrict,focusProject,focusLandmark,resetView:()=>resetView(),dispose(){disposed=true;clearReactions();clearUpgrades();cityDetails?.dispose();cancelAnimationFrame(frame);resizeObserver?.disconnect();controls?.dispose();renderer?.dispose();materials.forEach(item=>item.dispose());geometries.forEach(item=>item.dispose());}};
   api.ready=init();return api;
 }
