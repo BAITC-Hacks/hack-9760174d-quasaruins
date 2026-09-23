@@ -239,21 +239,26 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
     };
     const reserved=point=>[...projectSites.values()].some(site=>Math.abs(site[0]-point[0])<1.2&&Math.abs(site[1]-point[1])<1.05)||neighborhoodServices.some(item=>Math.hypot(item.site[0]-point[0],item.site[1]-point[1])<.45);
     const landmarks=cityDetails?.landmarkAnchors??[];
+    // Downtown around Bayterek: denser and taller there, lower towards the edges of the city.
+    const core=landmarks.find(anchor=>anchor.id==='bayterek');
+    const downtown=core?[core.position[0],-core.position[2]]:[home.center.x,-home.center.z];
+    const centrality=point=>Math.max(0,1-Math.hypot(point[0]-downtown[0],point[1]-downtown[1])/(9*MAP_SCALE));
     for(const district of districtRecords){
       const random=rng(hash(`${district.id}-neighborhoods`));
       const urban=district.candidates.filter(p=>Math.hypot(p[0]-district.anchor[0],p[1]-district.anchor[1])<10*MAP_SCALE);
       const candidates=urban.length?urban:district.candidates;
       if(!candidates.length)continue;
       // Plain, small blocks packed densely around road samples: simple massing with a thin roof cap, no windows.
-      const clusters=Array.from({length:32},()=>candidates[Math.floor(random()*candidates.length)]);
-      for(let i=0;i<2300&&district.buildings.length<(district.modeled?360:220);i++){
+      const clusters=Array.from({length:44},(_,k)=>{const picks=Array.from({length:k%4===3?1:4},()=>candidates[Math.floor(random()*candidates.length)]);return picks.reduce((best,p)=>centrality(p)>centrality(best)?p:best);});
+      for(let i=0;i<3200&&district.buildings.length<(district.modeled?480:220);i++){
         const cluster=i%clusters.length,base=clusters[cluster],slot=Math.floor(i/clusters.length);
         const point=[base[0]+(slot%6-2.5)*.4+(random()-.5)*.08,base[1]+(Math.floor(slot/6)-2.5)*.4+(random()-.5)*.08];
         const width=.15+random()*.13,depth=.14+random()*.14;
         if(!clearOfRoad(point,Math.hypot(width,depth)/2+.055)||!buildableAt(point,district,Math.max(width,depth)/2+.02)||reserved(point)||district.buildings.some(p=>Math.hypot(p[0]-point[0],p[1]-point[1])<.33))continue;
         const landmarkDistance=landmarks.length?Math.min(...landmarks.map(anchor=>Math.hypot(point[0]-anchor.position[0],point[1]+anchor.position[2]))):99;
-        const tower=cluster%7===0&&slot<3&&landmarkDistance>3;
-        const height=landmarkDistance<2.5?.14+random()*.14:tower?.75+random()*.7:.2+random()*.36;
+        const c=centrality(point),boost=.5+1.6*c**1.4;
+        const tower=(cluster%7===0||(c>.55&&cluster%3===0))&&slot<4&&landmarkDistance>1.8;
+        const height=landmarkDistance<1.4?.14+random()*.14:tower?(.75+random()*.7)*(.7+.7*c):(.2+random()*.36)*boost;
         const facade=FACADES[Math.floor(random()*FACADES.length)],x=point[0],z=-point[1];
         district.buildings.push(point);architecture.push({point,district,width,depth,height,tower});
         part(bodies,x,.16,z,width,height,depth,facade);
