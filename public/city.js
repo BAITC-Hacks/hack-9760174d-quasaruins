@@ -56,6 +56,7 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
   let reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const materials = new Map(), geometries = new Map(), projectSites = new Map(), serviceSites = new Map(), baselineServices = [], neighborhoodServices = [], architecture = [];
   let serviceSignature = '';
+  let interactionLocked = false;
   let projectHighlight = null, highlightRings = [];
   const geometry = (id, factory) => { if (!geometries.has(id)) geometries.set(id, factory()); return geometries.get(id); };
   const material = (color, opacity = 1) => {
@@ -595,6 +596,30 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
     const group=upgrades.find(item=>item.userData.measureId===measureId&&item.userData.districtId===(districtId??props.districtId))??upgrades.find(item=>item.userData.measureId===measureId);
     if(group&&ready3d){focusedProject={measureId,districtId:group.userData.districtId};moveCamera(group.position,Math.min(5.5,Math.max(3.5,home.span/(8*MAP_SCALE)))*MAP_SCALE);}
   }
+  // Card drag-and-drop support for the UI layer. Coordinates are CSS pixels relative to the canvas host.
+  function districtAtClientPoint(clientX, clientY) {
+    if (!ready3d || !raycaster || !Number.isFinite(clientX) || !Number.isFinite(clientY)) return null;
+    const rect = renderer.domElement.getBoundingClientRect();
+    if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom || !rect.width || !rect.height) return null;
+    raycaster.setFromCamera(new THREE.Vector2((clientX - rect.left) / rect.width * 2 - 1, -(clientY - rect.top) / rect.height * 2 + 1), camera);
+    const hit = raycaster.intersectObjects(districtRecords.flatMap((d) => d.meshes), false)[0];
+    return hit?.object.userData.districtId ?? null; // includes unmodeled districts such as Sarayshyk
+  }
+  function getPlacementAnchors() {
+    const result = { districts: {}, city: { x: 0, y: 0, visible: false } };
+    if (!ready3d || !camera || !home) return result;
+    const width = canvasHost.clientWidth, height = canvasHost.clientHeight;
+    const top = width < 761 ? 165 : 153, bottom = width < 761 ? (height < 690 ? 350 : 382) : 342;
+    const toScreen = (vector) => { const p = vector.clone().project(camera), x = (p.x + 1) / 2 * width, y = (1 - p.y) / 2 * height; return { x, y, visible: p.z > -1 && p.z < 1 && x >= 8 && x <= width - 8 && y >= top && y <= height - bottom }; };
+    for (const district of districtRecords) result.districts[district.id] = toScreen(new THREE.Vector3(district.anchor[0], .2, -district.anchor[1]));
+    result.city = toScreen(home.center.clone().setY(.2));
+    return result;
+  }
+  function setInteractionLocked(locked) {
+    interactionLocked = Boolean(locked);
+    if (controls) controls.enabled = !interactionLocked;
+    if (interactionLocked) setHoveredDistrict(null);
+  }
   function tick(now) {
     if(disposed)return;
     const elapsed=previousFrame?Math.min(.05,(now-previousFrame)/1000):0;previousFrame=now;
@@ -640,15 +665,11 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
       cityDetails=createCityDetails({THREE,geography,project,groundY:.146,modelScale:1});scene.add(cityDetails.group);
       buildGeography();ready3d=true;raycaster=new THREE.Raycaster();
       let pointerStart,lastHoverTime=0;
-      const districtAtPointer=event=>{
-        const rect=renderer.domElement.getBoundingClientRect();
-        raycaster.setFromCamera(new THREE.Vector2((event.clientX-rect.left)/rect.width*2-1,-(event.clientY-rect.top)/rect.height*2+1),camera);
-        const hit=raycaster.intersectObjects(districtRecords.flatMap(d=>d.meshes),false)[0];
-        return districtRecords.find(d=>d.id===hit?.object.userData.districtId);
-      };
-      renderer.domElement.addEventListener('pointerdown',event=>{pointerStart=[event.clientX,event.clientY];});
-      renderer.domElement.addEventListener('pointerup',event=>{const start=pointerStart;pointerStart=null;if(!start||Math.hypot(event.clientX-start[0],event.clientY-start[1])>5)return;const district=districtAtPointer(event);if(district?.modeled)onDistrictSelect(district.id);});
+      const districtAtPointer=event=>districtRecords.find(d=>d.id===districtAtClientPoint(event.clientX,event.clientY));
+      renderer.domElement.addEventListener('pointerdown',event=>{pointerStart=interactionLocked?null:[event.clientX,event.clientY];});
+      renderer.domElement.addEventListener('pointerup',event=>{const start=pointerStart;pointerStart=null;if(interactionLocked||!start||Math.hypot(event.clientX-start[0],event.clientY-start[1])>5)return;const district=districtAtPointer(event);if(district?.modeled)onDistrictSelect(district.id);});
       renderer.domElement.addEventListener('pointermove',event=>{
+        if(interactionLocked)return;
         if(event.buttons){setHoveredDistrict(null);return;}
         if(performance.now()-lastHoverTime<50)return;lastHoverTime=performance.now();
         setHoveredDistrict(districtAtPointer(event)?.id??null,true);
@@ -662,6 +683,6 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
     } catch(error) { ready3d=false;console.warn('Using district fallback:',error.stack ?? error.message);drawFallback(); }
     finally {clearTimeout(timeout);loadingHost.hidden=true;}
   }
-  const api={ready:null,update(next){props={...props,...next};if(typeof next.reducedMotion==='boolean')reducedMotion=next.reducedMotion;if(!MODES.has(props.mode))props.mode='draft';if(props.mode!=='after'||props.paused)clearReactions();if(reducedMotion&&focusTween){controls.target.copy(focusTween.toTarget);camera.position.copy(focusTween.toPosition);camera.zoom=focusTween.toZoom;camera.updateProjectionMatrix();focusTween=null;}updateSelection();updateUpgrades();updateServiceLabels();},focusDistrict,focusProject,focusLandmark,highlightProject,resetView:()=>resetView(),dispose(){disposed=true;highlightProject(null);clearReactions();clearUpgrades();baselineServices.forEach(service=>{service.label.remove();scene?.remove(service.group);});cityDetails?.dispose();cancelAnimationFrame(frame);resizeObserver?.disconnect();controls?.dispose();renderer?.dispose();materials.forEach(item=>item.dispose());geometries.forEach(item=>item.dispose());}};
+  const api={ready:null,update(next){props={...props,...next};if(typeof next.reducedMotion==='boolean')reducedMotion=next.reducedMotion;if(!MODES.has(props.mode))props.mode='draft';if(props.mode!=='after'||props.paused)clearReactions();if(reducedMotion&&focusTween){controls.target.copy(focusTween.toTarget);camera.position.copy(focusTween.toPosition);camera.zoom=focusTween.toZoom;camera.updateProjectionMatrix();focusTween=null;}updateSelection();updateUpgrades();updateServiceLabels();},focusDistrict,focusProject,focusLandmark,highlightProject,districtAtClientPoint,getPlacementAnchors,setInteractionLocked,resetView:()=>resetView(),dispose(){disposed=true;highlightProject(null);clearReactions();clearUpgrades();baselineServices.forEach(service=>{service.label.remove();scene?.remove(service.group);});cityDetails?.dispose();cancelAnimationFrame(frame);resizeObserver?.disconnect();controls?.dispose();renderer?.dispose();materials.forEach(item=>item.dispose());geometries.forEach(item=>item.dispose());}};
   api.ready=init();return api;
 }
