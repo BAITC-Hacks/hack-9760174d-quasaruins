@@ -44,6 +44,14 @@ test('real offline geography has all six districts and explicit model distinctio
   const geo=await response.json();assert.equal(geo.districts.features.length,6);
   assert.equal(geo.districts.features.find(f=>f.properties.id==='sarayshyk').properties.modeled,false);
   assert.equal(geo.roads.features.length,1930);assert.equal(geo.water.features.length,1135);
+  for(const layer of ['districts','water'])for(const f of geo[layer].features) {
+    const polygons=f.geometry.type==='Polygon'?[f.geometry.coordinates]:f.geometry.coordinates;
+    for(const polygon of polygons)for(const ring of polygon) {
+      assert.ok(ring.length>=4,'Every polygon ring needs at least four coordinates.');
+      assert.deepEqual(ring[0],ring.at(-1),'Rings must be closed.');
+      assert.ok(new Set(ring.map(p=>p.join(','))).size>=3,'Small polygons must not collapse during rounding.');
+    }
+  }
 });
 test('HTTP one-change recommendation retains user locks and fallback is labeled',async()=>{
   const input={selections:EXAMPLE_PLAN,lockedMeasureIds:['M7']};

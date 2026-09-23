@@ -4,7 +4,8 @@
 23 September 2026. It contains six administrative areas, 1,930 road features and
 1,135 water features. Coordinates are WGS84 longitude/latitude. Administrative
 boundary vertices are retained at six decimals; road and water geometry is
-simplified with a roughly 6.7 m tolerance for display. This is not a surveying map.
+simplified with a roughly 6.7 m tolerance for display. Source precision is kept
+for tiny rings that would collapse at six decimals. This is not a surveying map.
 
 The official portal is linked by the [city architecture department](https://www.gov.kz/memleket/entities/astana-saulet/press/news/details/324850?lang=ru).
 Sources:

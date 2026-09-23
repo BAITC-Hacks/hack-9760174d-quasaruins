@@ -38,6 +38,11 @@ def line(points,tolerance,ring=False):
         p=[round(x,6),round(y,6)]
         if not result or p!=result[-1]:result.append(p)
     if ring and result and result[0]!=result[-1]:result.append(result[0])
+    # A few source polygons are much smaller than six-decimal precision. Keep
+    # their source coordinates instead of returning a collapsed WebGL ring.
+    if ring and (len(result)<4 or len(set(map(tuple,result)))<3):
+        result=[p[:2] for p in points]
+        if result[0]!=result[-1]:result.append(result[0])
     return result
 
 def geometry(g,tolerance):
