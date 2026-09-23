@@ -1,107 +1,89 @@
-# Akim Lab — one city, two futures
+# Akim Lab
 
-**HackAlem AI · Track 12: “Akim for 5 Hours”**
+**A small city simulator for people who care about their city.**
 
-Choose five city projects with a budget of 100. Explore their effects across five modeled districts, compare futures and get an AI-curated briefing grounded in an inspectable simulation.
+HackAlem AI · Track 12: “Akim for 5 Hours” · Built by Nartay Aikyn
 
-**Playable checkpoint:** a full-screen miniature of Astana on a white canvas, with 1,387 small plain buildings, 90 representative existing service buildings across all six real districts, 15 mapped landmarks, parks, moving cars/pedestrians, and construction replay. Completed projects visibly change mapped roads, add rail, tint houses green or add trees, with icon reactions. Fourteen illustrated project cards form an open scrollable hand. Drag them onto a district; placed cards hover over their targets, and dragging them back removes a project. Invalid placements return the card and explain the official rule. Hover follows the pointer and highlights the affected region. Exact results, a timeline chart, pinned Plan A comparison, a grounded AI briefing and optional narration work through the same planning flow.
+Choose five projects. Spend a budget of 100. Watch a miniature Astana change, compare the results, and try a different plan.
 
-## Run
+![Akim Lab: miniature Astana with illustrated project cards and a simple budget display](docs/media/city-overview.jpg)
 
-Requires **Node.js 22+**. No npm install, database, build step, external map service or GPU is needed. Three.js 0.180.0 is vendored locally with its MIT license.
+## Why we built it
+
+People care about their neighborhoods: the school nearby, the road to work, the park where their children play. We wanted to give ordinary citizens an easy way to explore what they would improve in a city they love.
+
+The design is intentionally simple. You choose illustrated cards, place projects on the map, and see what changes. A small set of numbers shows the result; details are there when you want them. Familiar buildings, moving people and small reactions make the city feel alive and make it inviting to try another idea.
+
+Our aim is to make participation feel approachable. You can experiment, see the trade-offs of a limited budget, and think about how a choice helps one neighborhood or the wider city. The current app is a simulation for learning and discussion; it does not submit proposals to the government.
+
+## See it in action
+
+![Example plan replay: projects are built over eight quarters, followed by the calculated result](docs/media/construction-replay.gif)
+
+*Recorded from the app. Construction and reactions illustrate the projects; the official score is calculated at the end of quarter 8.*
+
+## Run locally
+
+Requires **Node.js 22+**. No install or build step is needed.
 
 ```sh
 node server/main.mjs
 ```
 
-Open **http://localhost:3000**. Alternatively, `./scripts/start.sh` finds Node on PATH or the bundled Codex runtime on this Mac. `npm start` is equivalent when npm is installed. Set `PORT=3001` if 3000 is occupied. The server binds only to the local machine.
+Open **http://localhost:3000**. `npm start` also works. To use another port, run `PORT=3001 node server/main.mjs`.
 
-For live AI, copy `.env.example` to `.env` and set `OPENAI_API_KEY`. Never place the key in browser code or Git. `OPENAI_MODEL` defaults to `gpt-4.1-mini`. The ignored local `.env.hackalem` is also supported. Existing environment values take priority. To force offline operation:
+The simulation and map work offline. For the live AI adviser, copy `.env.example` to `.env` and add your `OPENAI_API_KEY`. The default model is `gpt-4.1-mini`. Keep the key out of Git and browser code. Without an available AI service, the app shows a clearly labeled explanation based on the same calculations.
 
-```sh
-OPENAI_API_KEY='' node server/main.mjs
-```
+## How to play
 
-All calculations, recommendations and map assets work offline. Missing credentials, provider failures and timeouts return a clearly labeled deterministic explanation. The health endpoint reports configuration status, never the key.
+1. **Choose projects.** Drag cards onto a district. City-wide projects apply across the five modeled districts.
+2. **Adjust your plan.** Drag a placed card back to the hand to remove it. Invalid choices return to the hand with a reason.
+3. **Build your city.** Choose exactly five projects within the budget, then press **Start**. Watch construction or use the speed controls.
+4. **Compare the result.** Check the score and weakest district. Pin a result as **Plan A**, change your choices, and compare.
+5. **Explore an improvement.** Ask for a verified project swap or an AI explanation of the benefits and trade-offs.
 
-## Try the complete flow
+For a quick demo, click **Example → Start**. The supplied plan costs **95**, scores **56.54**, and leaves **zero critical indicators**.
 
-1. Click **Example**, then **Start**. Construction follows the project delays; use Pause or 1×/2×/4×. Only the end of quarter 8 shows the official result: cost95, score56.54, zero critical indicators.
-2. Pin the completed result as **Plan A**. Open **Project slots** and check **Keep in advice** for the Nura school.
-3. Open **Statistics**, click **Find one improvement**, inspect the verified swap, then **Apply verified change**: cost100, score57.21 after the new run.
-4. Switch between **Plan A** and **Your plan** to compare the same city view. **Timeline** shows the illustrative intermediate progression and exact final result.
-5. Click **Explain my plan** in the result window for a live or clearly labeled offline briefing. Its calculation evidence and optional voice controls stay with the displayed text. Voice playback requires a button press and is disclosed as AI-generated, with browser speech/text fallback.
+Drag the map to pan, right-drag to rotate, and scroll to zoom. **Fit city** resets the view. Click and keyboard controls are also available. The language button cycles **Kazakh, Russian and English**; AI briefings and narration are English in this version.
 
-To build your own plan, drag a project card onto a district. City-wide cards apply to all five modeled districts and float above the city centre. Drag a placed card back to the hand to remove it, or onto another district to relocate it. Click-card-then-district and keyboard controls are also available. Hover/focus a card for details and map highlights. Scroll the deck or use arrow/Home/End keys while a card is focused. Drag the map to pan, right-drag to orbit, and scroll to zoom; zooming out stops at the whole-city fit. Select a district to focus the camera; **Fit city** restores the full map. Landmark names stay off the main scene. The compact result opens additional figures under Details. The language button cycles Kazakh, Russian and English; verified briefings and narration remain English. The planner remains usable if WebGL fails. Open `/?view=2d` to try the compatibility view. [Demo and submission checklist](docs/DEMO.md).
+## What is included
 
-## Rules and exact model
-
-Every run uses the organizer’s same five synthetic districts, ten indicators, fourteen measures and 100-unit budget. Choose **exactly five unique projects**, at most two per category. District projects require a target; city projects affect all five modeled districts. All specified incompatibilities are enforced. Invalid plans have no score. The detailed rules permit 3–5 represented categories, rather than requiring one project per category.
-
-1. Scale each effect by `(8 - lag) / 8` for the eight-quarter horizon.
-2. Add the fixed synergy bonuses without lag scaling.
-3. Clip each indicator to 0–100, then compute the supplied weighted district scores.
-4. Apply the official formula:
-
-```text
-Score = 0.7 × population-weighted district average
-      + 0.3 × weakest district score
-      − number of district/indicator pairs strictly below 40
-```
-
-Unspent budget earns no bonus. Negative effects are retained. Full precision is kept internally. Baseline **52.55768**; the published example costs **95**, scores **56.54307**, and leaves **zero critical indicators**:
-
-| Project | Target |
+| Part | What you can do |
 | --- | --- |
-| M7 School and kindergarten | Nura |
-| M8 Family health clinic | Nura |
-| M10 Lighting and cameras | Nura |
-| M12 Digital resident requests | City-wide |
-| M5 Clean household fuel | Saryarka |
+| Miniature Astana | Explore mapped districts, landmarks, parks and roads. |
+| 14 project cards | Choose transport, ecology, social, safety and utility projects. |
+| Visible changes | See construction, upgraded buildings, trees, road treatments and rail. |
+| Clear results | Compare plans, inspect district scores, export JSON or print a report. |
+| Verified advice | Review a fully calculated improvement before applying it. |
+| Grounded AI | Get an explanation based on the simulation's verified results. |
 
-## Recommendations and AI
+## How the results work
 
-The deterministic optimizer checks every single-slot replacement, including district changes. Locked projects retain both their ID and target. Every candidate is fully validated and rescored, including synergies and critical penalties. Ties use cost and canonical IDs. This is exhaustive **one-change search**, not a claim of global optimality. Recommendations never apply automatically.
+The app follows the challenge's fixed dataset and formulas: **five unique projects, a 100-unit budget, and at most two projects per category**. Project delays, negative effects, synergies and incompatibilities all count. The score considers the city average, the weakest district and indicators below 40.
 
-The live adviser uses the OpenAI Responses API. It calls `get_scenario_evidence`, receives the current result, verified alternative and fact catalog, then selects relevant strength/risk fact IDs using strict structured output. The server validates the IDs and renders those exact statements plus the precise recommendation. Adverse effects, remaining critical indicators and the weakest district are always disclosed. The model prioritizes evidence; it cannot invent a displayed score, effect, project or target. The trace explains these steps. Briefings are English in this version; questions select relevant facts rather than start a general-purpose chat.
+The simulation calculates every number. AI helps explain the results. The improvement search checks all valid single-project replacements and preserves any projects you lock; it does not claim to find the best possible five-project plan.
 
-Calls have a 25-second limit, a concurrency bound and a small memory cache. Provider errors and credentials never reach the browser. The offline explanation is explicitly labeled.
+Astana's real geography is the backdrop. The challenge supplies **five synthetic districts**, while the real city has six. Sarayshyk appears on the map without an invented score. Buildings, construction and resident reactions are illustrative. This is a learning tool, not a forecast of real policy outcomes.
 
-## Architecture
+## Technical details
 
-- `shared/city-data.js`: immutable source dataset and example plan.
-- `shared/simulation.js`: pure validation, evaluation, score ledger and shared illustrative replay.
-- `shared/optimizer.js`: deterministic single-change search with locks.
-- `server/`: native Node HTTP server, grounded AI adviser and optional speech generation.
-- `data/astana.json`: offline official district, road and water geometry.
-- `data/city-details.json`: fifteen attributed landmark positions, fourteen footprints, three real park boundaries and the mapped LRT route with eighteen stations.
-- `public/city-project-effects.js`: completion-gated road, rail, tree and building treatments; [visual semantics](docs/PROJECT-EFFECTS.md).
-- `public/assets/projects/`: fourteen distinct AI-generated project illustrations; [art direction and exact prompts](docs/PROJECT-ART.md).
-- `public/`: browser frontend and procedural city; vendored Three.js.
-- `test/acceptance/`: independent Python oracle and expected fixtures.
-- `tests/`: engine, HTTP, AI boundary and independent acceptance checks.
-
-See [the interface contract](docs/CONTRACT.md), [acceptance criteria](docs/ACCEPTANCE.md) and [map provenance](data/README.md). Endpoints: `/api/health`, `/api/dataset`, `/api/geography`, `/api/simulate`, `/api/suggest`, `/api/advice`, `/api/speech`. Caller-supplied scores are ignored and recomputed. The optional speech endpoint returns AI-generated MP3 narration of the supplied briefing, using `gpt-4o-mini-tts`/`cedar`; no key or unavailable service returns a recoverable error. Playback controls and disclosure are frontend responsibilities.
-
-`timelinePlan` supplies the construction replay for quarters 0–8. Intermediate values are illustrative (`effect * max(0,quarter-lag)/8`, then active fixed synergies, clipping and the usual score). Only the quarter-eight result is official, and it exactly equals `simulatePlan`. The replay introduces no extra benefits or scoring rules. Reduced motion skips the animation and preserves the result.
-
-## Verify
+Built with **Node.js, plain JavaScript and Three.js**, with the OpenAI Responses API for the optional adviser. Map data and Three.js are included locally.
 
 ```sh
 node --test
 python3 test/acceptance/oracle.py
 ```
 
-Tests compare dataset fields, baseline and reference plans against an independent Python transcription. They cover invalid inputs, negative effects, fixed synergies, order independence, locks, preview consistency and HTTP boundaries. Provider behavior is mocked in tests; live AI is checked separately. A final passing suite must have **zero skipped tests**.
+The automated checks cover the official calculation, invalid plans, recommendations, HTTP endpoints and AI boundaries. An independent Python implementation checks the reference results.
 
-## Geography and limits
+- [Model, AI and architecture](docs/TECHNICAL.md)
+- [Short demo guide](docs/DEMO.md)
+- [Map sources and limitations](data/README.md)
+- [Project artwork and prompts](docs/PROJECT-ART.md)
+- [Interface contract](docs/CONTRACT.md)
 
-The official Astana public geoportal provides the district, road and water backdrop. Road and water geometry is simplified for display. The geography API also supplies fifteen landmark positions (including EXPO's Nur Alem and Nazarbayev University), fourteen footprints, three real park boundaries and the mapped LRT route with eighteen stations, with municipal and OpenStreetMap sources attributed separately. Existing LRT is a decorative backdrop independent of intervention M3. Current Astana has six districts; the challenge supplies five synthetic scoring rows. **Sarayshyk is outside this scenario**, without invented metrics or redistributed population shares. Ordinary buildings, project sites and landmark vertical forms are illustrative. Cars, pedestrians and emoji reactions do not represent real behavior predictions.
+## Participant and AI tools
 
-The renderer expands horizontal map spacing by a factor of two while keeping procedural model sizes readable. All geographic layers use the same projection; source coordinates and district topology are unchanged. This is a cartographic presentation, not a uniformly scaled architectural survey. Existing service locations and empty intervention parcels are illustrative.
+**Nartay Aikyn is the sole human participant and project lead.** Codex-A supported planning, backend, simulation and integration. Codex-B supported the frontend and city interaction. Claude supported landmarks, scenery, translations, tests and review. Image generation produced the project card artwork. These are AI tools used by one participant.
 
-Costs are virtual units. This is not financial ROI, a real traffic model, measured happiness or a validated policy forecast. No individual resident data is used. All geographic source links and processing details are in [data/README.md](data/README.md).
-
-## Participant and tools
-
-**Nartay Aikyn** is the sole human participant and project lead. Codex-A assists with planning, backend, scene integration and construction visuals; Codex-B with the frontend, city motion and replay controls; Claude with mapped landmarks, neighborhood scenery, language switching, independent tests and review. Built-in image generation produced the decorative project card artwork. Runtime AI is used for the grounded adviser and optional narration. Git authorship remains the participant’s; these tools are disclosed and are not additional human participants.
+The app itself uses AI for the optional grounded adviser and narration. The simulation and scoring remain deterministic.
