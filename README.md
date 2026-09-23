@@ -1,29 +1,90 @@
-# Akim - City Budget Simulator
+# Akim Lab — one city, two futures
 
-**HackAlem AI | Track 12: "Akim for 5 Hours"**
+**HackAlem AI · Track 12: “Akim for 5 Hours”**
 
-A city-management simulator that helps users explore how a limited budget can improve quality of life across five hypothetical districts of Astana.
+Choose five city projects with a budget of 100. Explore their effects across five modeled districts, compare futures and get an AI-curated briefing grounded in an inspectable simulation.
 
-## What we are building
+**Current checkpoint:** simulation, HTTP API, one-change optimizer, official geographic backdrop and AI adviser are implemented. The light isometric frontend is being built in parallel and will be integrated next. Until then, `/api/health` and other API endpoints work; `/` has no frontend yet.
 
-Users choose exactly five interventions from the supplied catalog of fourteen measures, within a shared budget of 100 units. Measures cover transport, ecology, social infrastructure, safety, and city services.
+## Run
 
-The simulator will validate each plan, calculate its effects using the organizer's dataset and scoring formula, and show the resulting **Astana Quality of Life Score**. An AI adviser will explain the benefits, risks, and trade-offs using those calculated results.
+Requires **Node.js 22+**. No npm install, database, build step, external map service or GPU is needed. Three.js 0.180.0 is vendored locally with its MIT license.
 
-## Planned core features
+```sh
+node server/main.mjs
+```
 
-- Intervention selection, district assignment, and budget validation.
-- Enforcement of measure limits, incompatibilities, and synergies.
-- Transparent before/after district indicators and score breakdown.
-- AI explanations grounded in deterministic calculations.
-- A reproducible local application with documented setup and tests.
+Open **http://localhost:3000**. Alternatively, `./scripts/start.sh` finds Node on PATH or the bundled Codex runtime on this Mac. `npm start` is equivalent when npm is installed. Set `PORT=3001` if 3000 is occupied. The server binds only to the local machine.
 
-The dataset is synthetic. Results illustrate the supplied model and are not predictions of real municipal outcomes.
+For live AI, copy `.env.example` to `.env` and set `OPENAI_API_KEY`. Never place the key in browser code or Git. `OPENAI_MODEL` defaults to `gpt-4.1-mini`. The ignored local `.env.hackalem` is also supported. Existing environment values take priority. To force offline operation:
+
+```sh
+OPENAI_API_KEY='' node server/main.mjs
+```
+
+All calculations, recommendations and map assets work offline. Missing credentials, provider failures and timeouts return a clearly labeled deterministic explanation. The health endpoint reports configuration status, never the key.
+
+## Rules and exact model
+
+Every run uses the organizer’s same five synthetic districts, ten indicators, fourteen measures and 100-unit budget. Choose **exactly five unique projects**, at most two per category. District projects require a target; city projects affect all five modeled districts. All specified incompatibilities are enforced. Invalid plans have no score. The detailed rules permit 3–5 represented categories, rather than requiring one project per category.
+
+1. Scale each effect by `(8 - lag) / 8` for the eight-quarter horizon.
+2. Add the fixed synergy bonuses without lag scaling.
+3. Clip each indicator to 0–100, then compute the supplied weighted district scores.
+4. Apply the official formula:
+
+```text
+Score = 0.7 × population-weighted district average
+      + 0.3 × weakest district score
+      − number of district/indicator pairs strictly below 40
+```
+
+Unspent budget earns no bonus. Negative effects are retained. Full precision is kept internally. Baseline **52.55768**; the published example costs **95**, scores **56.54307**, and leaves **zero critical indicators**:
+
+| Project | Target |
+| --- | --- |
+| M7 School and kindergarten | Nura |
+| M8 Family health clinic | Nura |
+| M10 Lighting and cameras | Nura |
+| M12 Digital resident requests | City-wide |
+| M5 Clean household fuel | Saryarka |
+
+## Recommendations and AI
+
+The deterministic optimizer checks every single-slot replacement, including district changes. Locked projects retain both their ID and target. Every candidate is fully validated and rescored, including synergies and critical penalties. Ties use cost and canonical IDs. This is exhaustive **one-change search**, not a claim of global optimality. Recommendations never apply automatically.
+
+The live adviser uses the OpenAI Responses API. It calls `get_scenario_evidence`, receives the current result, verified alternative and fact catalog, then selects relevant strength/risk fact IDs using strict structured output. The server validates the IDs and renders those exact statements plus the precise recommendation. The model prioritizes evidence; it cannot invent a displayed score, effect, project or target. The trace explains these steps. Briefings are English in this version; questions select relevant facts rather than start a general-purpose chat.
+
+Calls have a 25-second limit, a concurrency bound and a small memory cache. Provider errors and credentials never reach the browser. The offline explanation is explicitly labeled.
+
+## Architecture
+
+- `shared/city-data.js`: immutable source dataset and example plan.
+- `shared/simulation.js`: pure validation, evaluation and score ledger.
+- `shared/optimizer.js`: deterministic single-change search with locks.
+- `server/`: native Node HTTP server and grounded AI adviser.
+- `data/astana.json`: offline official district, road and water geometry.
+- `public/`: browser frontend and procedural city; vendored Three.js.
+- `test/acceptance/`: independent Python oracle and expected fixtures.
+- `tests/`: engine, HTTP, AI boundary and independent acceptance checks.
+
+See [the interface contract](docs/CONTRACT.md), [acceptance criteria](docs/ACCEPTANCE.md) and [map provenance](data/README.md). Endpoints: `/api/health`, `/api/dataset`, `/api/geography`, `/api/simulate`, `/api/suggest`, `/api/advice`. Caller-supplied scores are ignored and recomputed.
+
+## Verify
+
+```sh
+node --test
+python3 test/acceptance/oracle.py
+```
+
+Tests compare dataset fields, baseline and reference plans against an independent Python transcription. They cover invalid inputs, negative effects, fixed synergies, order independence, locks, preview consistency and HTTP boundaries. Provider behavior is mocked in tests; live AI is checked separately. A final passing suite must have **zero skipped tests**.
+
+## Geography and limits
+
+The official Astana public geoportal provides the real geographic backdrop. Road and water geometry is simplified for display. Current Astana has six districts; the challenge supplies five synthetic scoring rows. **Sarayshyk is outside this scenario**, without invented metrics or redistributed population shares. Buildings and project sites are illustrative, not surveyed properties. Cars, pedestrians and emoji reactions do not represent real behavior predictions.
+
+Costs are virtual units. This is not financial ROI, a real traffic model, measured happiness or a validated policy forecast. No individual resident data is used. All geographic source links and processing details are in [data/README.md](data/README.md).
 
 ## Participant and tools
 
-**Nartay Aikyn** is the sole human participant and project lead. Codex and Claude assist with planning, implementation, and review; their use will be documented in the completed project.
-
-## Current status
-
-Track 12 has been selected. The implementation plan is being finalized. Launch instructions, architecture details, and test results will be added as the application is built.
+**Nartay Aikyn** is the sole human participant and project lead. Codex-A assists with planning, backend and integration; Codex-B with the frontend and 3D scene; Claude with independent tests and review. Runtime AI is used for the grounded adviser. Git authorship remains the participant’s; these tools are disclosed and are not additional human participants.

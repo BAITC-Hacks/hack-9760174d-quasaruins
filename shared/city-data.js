@@ -45,7 +45,7 @@ const measureRows = [
 
 export const DATASET = deepFreeze({
   version:'hackalem-12-v1', budget:100, horizon:8, requiredDecisions:5, maxPerCategory:2, criticalThreshold:40,
-  description:'Organizer-provided synthetic scenario. Geography is real; these indicators are not observations or policy forecasts.',
+  description:'Organizer-provided synthetic scenario for five modeled districts. The map backdrop uses real geography; indicator values are not observations or forecasts.',
   categories:[
     {id:'transport',name:'Transport',color:'#238A9A'},
     {id:'ecology',name:'Ecology',color:'#4B9562'},
