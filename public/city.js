@@ -1,11 +1,12 @@
 /** Geographic presentation only. All policy effects and scores come from the shared evaluator. */
 import { createCityDetails } from './city-details.js?v=20260923-r09';
 import { makeTrack, sampleTrack } from './city-motion.js';
+import { createProjectEffects } from './city-project-effects.js?v=20260923-r14';
 import { BASELINE } from '../shared/simulation.js';
 // One shared horizontal scale keeps every geographic layer aligned. Model sizes
 // and parcel clearances remain world-space dimensions, rather than doubling.
 const MAP_SCALE = 2;
-const COLORS = { land: 0xf7f9f5, side: 0xf7f9f5, outside: 0xffffff, water: 0x379ebd, road: 0x7e8c91, building: 0xf3f1e9, roof: 0x526976, glass: 0x295570, green: 0x24784f, mint: 0xedf7ee, transport: 0x187e94, social: 0x8a73b8, safety: 0xb37a25, services: 0x436c8d };
+const COLORS = { land: 0xf7f9f5, side: 0xffffff, outside: 0xffffff, water: 0x379ebd, road: 0x7e8c91, building: 0xf3f1e9, roof: 0x526976, glass: 0x295570, green: 0x24784f, mint: 0xedf7ee, transport: 0x187e94, social: 0x8a73b8, safety: 0xb37a25, services: 0x436c8d };
 const FACADES = [0xf4f3ed,0xe9e5d9,0xd9d0c2,0xf8f9f5,0xbc785c,0x657a86];
 const SERVICE_TYPES = [
   {id:'school',name:'School',indicator:'S1',color:0x8a73b8},
@@ -16,7 +17,11 @@ const SERVICE_TYPES = [
   {id:'transit',name:'Transit stop',indicator:'T2',color:0x238a9a},
 ];
 const PROJECT_SERVICE = {M1:'transit',M2:'transit',M3:'transit',M5:'utilities',M7:'school',M8:'clinic',M10:'safety',M11:'safety',M12:'civic',M13:'utilities',M14:'utilities'};
-const SERVICE_SCALE = .75;
+const SERVICE_SCALE = .6;
+const SMALL_SERVICE_SCALE = .38;
+// Completion bursts: one pale icon per project, no metric text.
+const PROJECT_ICONS = {M1:'🚌',M2:'🚦',M3:'🚊',M4:'🌳',M5:'🍃',M6:'🌱',M7:'🏫',M8:'🏥',M9:'⚽',M10:'💡',M11:'🚸',M12:'📱',M13:'💧',M14:'🛠️'};
+const PROJECT_TINTS = {transport:'#dff1f4',ecology:'#e3f3e4',social:'#eee8f6',safety:'#f8efdd',services:'#e6edf4'};
 const COMPACT_PROJECTS = new Set(['M4','M6','M9']);
 const MODES = new Set(['draft', 'before', 'after', 'a']);
 const hash = (text) => [...String(text)].reduce((value, char) => ((value * 31 + char.charCodeAt(0)) >>> 0), 7);
@@ -52,7 +57,7 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
   let props = { selections: [], result: null, districtId: 'nura', mode: 'draft', paused: false };
   let signature = '', ready3d = false, disposed = false, frame, resizeObserver, focusTween, home, animationStart = 0, upgrades = [];
   let ambient = [], motionTime = 0, previousFrame = 0, ambientMeshes, reactions = [], lastReactedPlan = '', previousAppliedKeys = new Set();
-  let focusedProject = null, projectFocusLabel, hoveredDistrictId = null, hoverLabel, cityDetails = null, landmarkLabels = [];
+  let focusedProject = null, projectFocusLabel, hoveredDistrictId = null, hoverLabel, cityDetails = null, landmarkLabels = [], projectEffects = null, fitZoom = null;
   let reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const materials = new Map(), geometries = new Map(), projectSites = new Map(), serviceSites = new Map(), baselineServices = [], neighborhoodServices = [], architecture = [];
   let serviceSignature = '';
@@ -173,6 +178,11 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
     buildBaselineServices();
     buildNeighborhoodServices();
     buildArchitecture();
+    // Visible per-project scenery (roads, trees, greening, trains) from codex-A's module. It keeps off mapped
+    // landmarks, parks, LRT, every service/project parcel and (inside the module) every building footprint.
+    const parcelReserved=(point,clearance=0)=>Boolean(cityDetails?.isReserved(point,clearance))||[...projectSites.values()].some(site=>Math.hypot(site[0]-point[0],site[1]-point[1])<.75+clearance)||neighborhoodServices.some(item=>Math.hypot(item.site[0]-point[0],item.site[1]-point[1])<.45+clearance);
+    projectEffects=createProjectEffects({THREE,roads,districts:districtRecords,architecture,landAt,isReserved:parcelReserved,getProjectSite:(districtId,measureId)=>{const record=districtRecords.find(item=>item.id===districtId);return record?projectSite(record,measureId):null;},groundY:.18});
+    scene.add(projectEffects.group);
     buildPopulation();
     resetView(true);
   }
@@ -187,14 +197,26 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
   }
   function buildNeighborhoodServices() {
     const parts=[];
-    // A second small service of each type adds a neighborhood around the six
-    // primary project sites. These illustrative existing forms never upgrade.
-    for(const district of districtRecords.filter(item=>item.modeled))for(const type of SERVICE_TYPES){
-      const site=projectSite(district,`neighborhood-${type.id}`);if(!site)continue;
-      const group=new THREE.Group(),scale=SERVICE_SCALE*.82;
-      group.position.set(site[0],.16*(1-scale),-site[1]);group.scale.setScalar(scale);baselineShape(group,type.id);group.updateMatrixWorld(true);
-      neighborhoodServices.push({district,type,site,bounds:new THREE.Box3().setFromObject(group)});
-      group.traverse(part=>{if(part.isMesh)parts.push({geometry:part.geometry,matrix:part.matrixWorld.clone(),color:part.material.color.clone()});});
+    // Small illustrative existing services around the labelled ones: three schools and three clinics per
+    // district plus one of each other type. Sarayshyk gets them too as a visual backdrop; none are scored
+    // or upgraded, and their parcels stay small so the city remains dense.
+    for(const district of districtRecords){
+      const random=rng(hash(`${district.id}-small-services`));
+      const pool=district.candidates.filter(p=>Math.hypot(p[0]-district.anchor[0],p[1]-district.anchor[1])<9*MAP_SCALE);
+      const candidates=pool.length?pool:district.candidates;
+      if(!candidates.length)continue;
+      for(const type of SERVICE_TYPES){
+        const count=type.id==='school'||type.id==='clinic'?3:1;
+        for(let placed=0,tries=0;placed<count&&tries<180;tries++){
+          const base=candidates[Math.floor(random()*candidates.length)],site=[base[0]+(random()-.5)*.7,base[1]+(random()-.5)*.7];
+          if(!buildableAt(site,district,.34)||[...projectSites.values()].some(p=>Math.hypot(p[0]-site[0],p[1]-site[1])<1.15)||neighborhoodServices.some(item=>Math.hypot(item.site[0]-site[0],item.site[1]-site[1])<.95))continue;
+          placed++;
+          const group=new THREE.Group(),scale=SMALL_SERVICE_SCALE;
+          group.position.set(site[0],.16*(1-scale),-site[1]);group.scale.setScalar(scale);baselineShape(group,type.id);group.updateMatrixWorld(true);
+          neighborhoodServices.push({district,type,site,bounds:new THREE.Box3().setFromObject(group)});
+          group.traverse(part=>{if(part.isMesh)parts.push({geometry:part.geometry,matrix:part.matrixWorld.clone(),color:part.material.color.clone()});});
+        }
+      }
     }
     instanceParts('Existing neighborhood services',parts);
   }
@@ -205,43 +227,34 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
       dummy.position.set(x,y+h/2,z);dummy.scale.set(w,h,d);dummy.updateMatrix();
       target.push({geometry:boxGeometry,matrix:dummy.matrix.clone(),color:new THREE.Color(color)});
     };
-    const reserved=point=>[...projectSites.values()].some(site=>Math.abs(site[0]-point[0])<1.2&&Math.abs(site[1]-point[1])<1.05);
-    for(const district of districtRecords.filter(item=>item.modeled)){
+    const reserved=point=>[...projectSites.values()].some(site=>Math.abs(site[0]-point[0])<1.2&&Math.abs(site[1]-point[1])<1.05)||neighborhoodServices.some(item=>Math.hypot(item.site[0]-point[0],item.site[1]-point[1])<.45);
+    const landmarks=cityDetails?.landmarkAnchors??[];
+    for(const district of districtRecords){
       const random=rng(hash(`${district.id}-neighborhoods`));
       const urban=district.candidates.filter(p=>Math.hypot(p[0]-district.anchor[0],p[1]-district.anchor[1])<10*MAP_SCALE);
       const candidates=urban.length?urban:district.candidates;
       if(!candidates.length)continue;
-      // Small coherent blocks around road samples, not isolated identical cubes.
-      const clusters=Array.from({length:18},()=>candidates[Math.floor(random()*candidates.length)]);
-      for(let i=0;i<360&&district.buildings.length<150;i++){
+      // Plain, small blocks packed densely around road samples: simple massing with a thin roof cap, no windows.
+      const clusters=Array.from({length:32},()=>candidates[Math.floor(random()*candidates.length)]);
+      for(let i=0;i<1300&&district.buildings.length<(district.modeled?360:220);i++){
         const cluster=i%clusters.length,base=clusters[cluster],slot=Math.floor(i/clusters.length);
-        const point=[base[0]+(slot%5-2)*.7+(random()-.5)*.12,base[1]+(Math.floor(slot/5)-1.5)*.7+(random()-.5)*.12];
-        const width=.26+random()*.23,depth=.24+random()*.25;
-        if(!buildableAt(point,district,Math.max(width,depth)/2+.025)||reserved(point)||district.buildings.some(p=>Math.hypot(p[0]-point[0],p[1]-point[1])<.64))continue;
-        const landmarkDistance=Math.min(...(cityDetails?.landmarkAnchors??[]).map(anchor=>Math.hypot(point[0]-anchor.position[0],point[1]+anchor.position[2])));
-        const tower=cluster%6===0&&slot<4&&landmarkDistance>3;
-        const height=landmarkDistance<2.5?.24+random()*.22:tower?1.1+random()*1.25:.38+random()*.64;
+        const point=[base[0]+(slot%6-2.5)*.4+(random()-.5)*.08,base[1]+(Math.floor(slot/6)-2.5)*.4+(random()-.5)*.08];
+        const width=.15+random()*.13,depth=.14+random()*.14;
+        if(!buildableAt(point,district,Math.max(width,depth)/2+.02)||reserved(point)||district.buildings.some(p=>Math.hypot(p[0]-point[0],p[1]-point[1])<.33))continue;
+        const landmarkDistance=landmarks.length?Math.min(...landmarks.map(anchor=>Math.hypot(point[0]-anchor.position[0],point[1]+anchor.position[2]))):99;
+        const tower=cluster%7===0&&slot<3&&landmarkDistance>3;
+        const height=landmarkDistance<2.5?.14+random()*.14:tower?.75+random()*.7:.2+random()*.36;
         const facade=FACADES[Math.floor(random()*FACADES.length)],x=point[0],z=-point[1];
         district.buildings.push(point);architecture.push({point,district,width,depth,height,tower});
         part(bodies,x,.16,z,width,height,depth,facade);
-        part(details,x,.16,z,width*1.08,.055,depth*1.08,0xe1e5df);
-        part(details,x,.16+height,z,width*1.04,.055,depth*1.04,tower?0x3f5967:0x75827c);
-        if(tower)part(details,x,.215+height,z,width*.55,.11,depth*.6,facade);
-        const floors=Math.max(1,Math.min(8,Math.floor(height/.19)));
-        for(let floor=0;floor<floors;floor++){
-          const y=.23+floor*(height-.1)/floors,h=Math.min(.09,height*.22);
-          // Dark glazing bands, side windows and pale mullions are all instanced.
-          for(const side of [-1,1])part(details,x,y,z+side*(depth/2+.006),width*.78,h,.014,COLORS.glass);
-          for(const side of [-1,1])part(details,x+side*(width/2+.006),y,z,.014,h,depth*.65,COLORS.glass);
-        }
-        for(const side of [-1,1])part(details,x,.20+height*.05,z+side*(depth/2+.015),.026,height*.78,.02,facade);
-        if(i%3===0)trees.push({point:[x+.5,point[1]+.34],district});
+        part(details,x,.16+height,z,width*1.04,.03,depth*1.04,tower?0x3f5967:0x8a948f);
+        if(i%4===0)trees.push({point:[x+.26,point[1]+.2],district});
       }
     }
-    instanceParts('District architecture',bodies);instanceParts('Facade windows and rooflines',details);
-    const safeTrees=trees.filter(({point,district})=>buildableAt(point,district,.19)&&!reserved(point)&&!architecture.some(item=>Math.hypot(item.point[0]-point[0],item.point[1]-point[1])<.45)).slice(0,260);
+    instanceParts('District architecture',bodies);instanceParts('Roof caps',details);
+    const safeTrees=trees.filter(({point,district})=>buildableAt(point,district,.15)&&!reserved(point)&&!architecture.some(item=>Math.hypot(item.point[0]-point[0],item.point[1]-point[1])<.24)).slice(0,420);
     const trunks=new THREE.InstancedMesh(geometry('cylinder',()=>new THREE.CylinderGeometry(1,1,1,8)),material(0x7c6553),safeTrees.length),crowns=new THREE.InstancedMesh(geometry('tree',()=>new THREE.IcosahedronGeometry(1,0)),material(COLORS.green),safeTrees.length);
-    safeTrees.forEach(({point:[x,north]},i)=>{dummy.position.set(x,.264,-north);dummy.scale.set(.028,.208,.028);dummy.updateMatrix();trunks.setMatrixAt(i,dummy.matrix);dummy.position.y=.544;dummy.scale.set(.184,.296,.184);dummy.updateMatrix();crowns.setMatrixAt(i,dummy.matrix);});crowns.castShadow=true;scene.add(trunks,crowns);
+    safeTrees.forEach(({point:[x,north]},i)=>{dummy.position.set(x,.24,-north);dummy.scale.set(.022,.16,.022);dummy.updateMatrix();trunks.setMatrixAt(i,dummy.matrix);dummy.position.y=.44;dummy.scale.set(.13,.21,.13);dummy.updateMatrix();crowns.setMatrixAt(i,dummy.matrix);});crowns.castShadow=true;scene.add(trunks,crowns);
   }
   function buildPopulation() {
     const tracks = roads.map((road) => makeTrack(road.map(([x, y]) => [x, -y]))).filter((track) => track && track.length >= .35 && track.length <= 8*MAP_SCALE && track.vertices.some(([x,z]) => Math.hypot(x,z) < 9*MAP_SCALE));
@@ -387,7 +400,25 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
       case 'M3':box(0,.65,1.85,.075,.32,COLORS.glass,.5);for(const x of [-.72,.72])pole(x,.65,.35,COLORS.services);line([[-.92,.6,.57],[.92,.6,.57]],COLORS.transport);line([[-.92,.6,.74],[.92,.6,.74]],COLORS.transport);box(.24,.65,.64,.2,.2,COLORS.mint,.6);box(.24,.65,.58,.05,.22,COLORS.transport,.8);break;
     }
   }
-  function constructionShape(group) {
+  function constructionShape(group, measureId = '') {
+    const cone=(x,z)=>{const mesh=new THREE.Mesh(geometry('cone',()=>new THREE.ConeGeometry(1,1,10)),material(0xe8793a));mesh.position.set(x,.23,z);mesh.scale.set(.05,.12,.05);mesh.castShadow=true;group.add(mesh);};
+    if(['M1','M2','M3','M11'].includes(measureId)){
+      // Road works: dug-up strip, striped barriers, cones and a small excavator.
+      meshBox(group,0,.17,0,1.6,.03,.42,0xcbb89a);
+      for(const x of [-.6,-.2,.2,.6])meshBox(group,x,.2,.26,.3,.07,.035,x%.4===0?0xf2f0e8:0xe8793a);
+      for(const x of [-.75,-.35,.05,.45,.8])cone(x,-.28);
+      meshBox(group,.45,.2,-.02,.34,.16,.22,0xe0a93b);meshBox(group,.36,.36,-.02,.16,.14,.18,0xe0a93b);
+      lines(group,[new THREE.Vector3(.55,.4,-.02),new THREE.Vector3(.85,.62,-.02),new THREE.Vector3(1.02,.34,-.02)],0x6b5a3a);
+      return;
+    }
+    if(['M4','M6','M9'].includes(measureId)){
+      // Landscaping: soil beds, young saplings and a wheelbarrow.
+      meshBox(group,0,.17,0,1.35,.035,1.05,0xb99b72);
+      for(const [x,z] of [[-.45,-.3],[0,-.3],[.45,-.3],[-.45,.3],[0,.3],[.45,.3]]){cylinder(group,x,.2,z,.015,.22,0x7c6553);const leaf=new THREE.Mesh(geometry('sapling',()=>new THREE.IcosahedronGeometry(1,0)),material(0x7fbf6a));leaf.position.set(x,.46,z);leaf.scale.setScalar(.09);group.add(leaf);}
+      meshBox(group,.65,.2,.02,.16,.08,.1,0x4f7c9a);cone(-.7,.05);
+      return;
+    }
+    // Buildings: scaffold frame, crane and site fence.
     meshBox(group,0,.17,0,1.25,.045,.9,0xded8c4);
     for(const x of [-.58,.58])for(const z of [-.4,.4])cylinder(group,x,.2,z,.026,1.1,0xbe9c54);
     for(const y of [.56,.98]) {
@@ -398,6 +429,7 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
     meshBox(group,.25,1.73,-.42,1.4,.065,.08,COLORS.safety);
     lines(group,[new THREE.Vector3(-.35,1.76,-.42),new THREE.Vector3(-.35,.75,-.42)],0x8b886d);
     meshBox(group,-.35,.67,-.42,.16,.1,.14,0xa9b5a3);
+    cone(-.7,.5);cone(.7,.5);
   }
   function projectShape(group, measureId, opacity) {
     const box = (x, z, w, h, d, color = COLORS.mint, y = .17) => meshBox(group, x, y, z, w, h, d, color, opacity);
@@ -454,11 +486,12 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
         group.position.set(site[0], .16*(1-projectScale), -site[1]);
         group.scale.setScalar(projectScale);
         group.userData = { districtId: district.id, measureId: selection.measureId, constructing, scale:projectScale, animate:justCompleted||(!replay&&props.mode==='after'), reveal:props.paused||reducedMotion?1:0 };
-        if(constructing){const extension=new THREE.Group();if(PROJECT_SERVICE[selection.measureId]){extension.position.set(.43,.055,.07);extension.scale.setScalar(.58);}constructionShape(extension);group.add(extension);}else serviceUpgradeShape(group, selection.measureId, opacity);
+        if(constructing){const extension=new THREE.Group();if(PROJECT_SERVICE[selection.measureId]){extension.position.set(.43,.055,.07);extension.scale.setScalar(.58);}constructionShape(extension,selection.measureId);group.add(extension);}else serviceUpgradeShape(group, selection.measureId, opacity);
         if(justCompleted&&!reducedMotion&&!props.paused) {
           const dust=new THREE.Group(),dustMaterial=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.7,depthWrite:false});
           for(let i=0;i<5;i++){const puff=new THREE.Mesh(geometry('dust',()=>new THREE.IcosahedronGeometry(1,0)),dustMaterial);const angle=i*Math.PI*2/5;puff.position.set(Math.cos(angle)*.45,.35,Math.sin(angle)*.35);puff.scale.set(.25,.18,.25);dust.add(puff);}
           group.add(dust);group.userData.dust=dust;
+          burstAt(group,selection.measureId);
         }
         if((props.highlightKeys??[]).includes(`${selection.measureId}:${selection.districtId??'*'}`)){
           const ring=new THREE.Mesh(geometry('change-ring',()=>new THREE.RingGeometry(.76,.86,36)),new THREE.MeshBasicMaterial({color:props.mode==='a'?COLORS.safety:COLORS.green,transparent:true,opacity:.75*opacity,depthWrite:false,depthTest:false}));ring.rotation.x=-Math.PI/2;ring.position.y=.19;ring.renderOrder=3;group.add(ring);
@@ -470,35 +503,23 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
     updateServiceLabels();queueReactions();
   }
   function clearReactions(){ reactions.forEach(reaction=>reaction.element.remove());reactions=[]; }
-  function queueReactions(){
-    clearReactions();
-    if(props.mode!=='after'||!props.result?.valid||(props.replay&&props.replay.quarter<8))return;
-    const plan=props.selections.map(item=>`${item.measureId}:${item.districtId??'*'}`).sort().join('|');
-    if(plan===lastReactedPlan)return;
-    const newKeys=new Set(props.selections.map(item=>`${item.measureId}:${item.districtId??'*'}`).filter(item=>!previousAppliedKeys.has(item)));
-    lastReactedPlan=plan;previousAppliedKeys=new Set(props.selections.map(item=>`${item.measureId}:${item.districtId??'*'}`));
-    if(props.paused||reducedMotion||!reactionsHost)return;
-    for(const selection of props.selections){
-      if(reactions.length>=4||!newKeys.has(`${selection.measureId}:${selection.districtId??'*'}`))continue;
-      const contribution=props.result.contributions?.find(item=>item.measureId===selection.measureId);
-      if(!contribution)continue;
-      const effects=Object.entries(contribution.effects??{}).filter(([,value])=>value!==0).sort((a,b)=>a[1]<0?-1:b[1]<0?1:Math.abs(b[1])-Math.abs(a[1]));
-      const effect=effects[0];if(!effect)continue;
-      const group=upgrades.find(item=>item.userData.measureId===selection.measureId&&item.userData.districtId===(selection.districtId??props.districtId))??upgrades.find(item=>item.userData.measureId===selection.measureId);
-      if(!group)continue;
-      const people=ambient.filter(actor=>actor.kind==='person'&&actor.position);
-      const person=people.reduce((nearest,actor)=>!nearest||actor.position.distanceToSquared(group.position)<nearest.position.distanceToSquared(group.position)?actor:nearest,null);
-      const anchor=person&&person.position.distanceTo(group.position)<1.5?person.position.clone():group.position.clone();anchor.y=.9;
-      const element=document.createElement('div');element.className=`city-reaction${effect[1]<0?' caution':''}`;element.setAttribute('aria-hidden','true');
-      const icon=effect[1]<0?'⚠':effect[0].startsWith('E')?'🌿':effect[0].startsWith('S')?'♥':'🙂';
-      element.textContent=`${icon} ${effect[1]>0?'+':''}${Number(effect[1].toFixed(2))} ${props.indicatorNames?.[effect[0]]??effect[0]}`;
-      element.title='Illustrative reaction to this project’s computed effect before synergy; not measured resident sentiment.';reactionsHost.append(element);
-      reactions.push({element,anchor,start:performance.now(),offset:reactions.length*9});
-    }
+  // Kept for the api.update path: completion bursts are created in updateUpgrades as each project completes.
+  function queueReactions(){}
+  function burstAt(group, measureId){
+    if(!reactionsHost||props.paused||reducedMotion||reactions.length>24)return;
+    const category=props.measureCategories?.[measureId]??({M1:'transport',M2:'transport',M3:'transport',M4:'ecology',M5:'ecology',M6:'ecology',M7:'social',M8:'social',M9:'social',M10:'safety',M11:'safety',M12:'services',M13:'services',M14:'services'})[measureId];
+    const tint=PROJECT_TINTS[category]??'#eef4ee',anchor=group.position.clone();anchor.y=.9;
+    const icons=[PROJECT_ICONS[measureId]??'✨','✨','✨'];
+    icons.forEach((icon,i)=>{
+      const element=document.createElement('div');element.className='city-burst';element.setAttribute('aria-hidden','true');element.textContent=icon;
+      element.style.cssText=`position:absolute;transform:translate(-50%,-100%);pointer-events:none;line-height:1;border-radius:999px;${i===0?`font-size:22px;padding:5px 7px;background:${tint}e6;border:1px solid #ffffff;box-shadow:0 3px 12px #2b583118`:'font-size:12px;opacity:.9'}`;
+      reactionsHost.append(element);
+      reactions.push({element,anchor,start:performance.now()+i*90,offset:0,dx:i===0?0:(i===1?-26:26),burst:true});
+    });
   }
   function updateReactions(now){
     if(props.mode!=='after'||props.paused){clearReactions();return;}
-    reactions=reactions.filter(reaction=>{const age=now-reaction.start;if(age>1800){reaction.element.remove();return false;}const point=reaction.anchor.clone().project(camera),x=(point.x+1)/2*canvasHost.clientWidth,y=(1-point.y)/2*canvasHost.clientHeight-12-Math.min(1,age/1800)*20-reaction.offset;reaction.element.style.left=`${x}px`;reaction.element.style.top=`${y}px`;reaction.element.style.opacity=age>1300?String((1800-age)/500):'1';reaction.element.hidden=x<60||x>canvasHost.clientWidth-60||y<62||y>canvasHost.clientHeight-45;return true;});
+    reactions=reactions.filter(reaction=>{const age=Math.max(0,now-reaction.start);if(age>1800){reaction.element.remove();return false;}const point=reaction.anchor.clone().project(camera),x=(point.x+1)/2*canvasHost.clientWidth+(reaction.dx??0)*Math.min(1,age/500),y=(1-point.y)/2*canvasHost.clientHeight-12-Math.min(1,age/1800)*(reaction.burst?42:20)-reaction.offset;reaction.element.style.left=`${x}px`;reaction.element.style.top=`${y}px`;reaction.element.style.opacity=age>1300?String((1800-age)/500):'1';reaction.element.hidden=x<60||x>canvasHost.clientWidth-60||y<62||y>canvasHost.clientHeight-45;return true;});
   }
   function updateSelection() {
     for (const district of districtRecords) {
@@ -534,7 +555,7 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
       const position = new THREE.Vector3(district.anchor[0], 1.65, -district.anchor[1]).project(camera);
       const x=(position.x+1)/2*width,y=(1-position.y)/2*height,labelWidth=district.modeled?Math.max(45,district.name.length*6+16):122,labelHeight=district.modeled?24:38;
       const rect={left:x-labelWidth/2,right:x+labelWidth/2,top:y-labelHeight/2,bottom:y+labelHeight/2};
-      const hidden=rect.left<8||rect.right>width-8||rect.top<(width<761?165:153)||rect.bottom>height-(width<761?(height<690?350:382):342)||occupied.some(other=>rect.left<other.right+5&&rect.right>other.left-5&&rect.top<other.bottom+5&&rect.bottom>other.top-5);
+      const hidden=rect.left<8||rect.right>width-8||rect.top<(width<761?112:92)||rect.bottom>height-(width<761?(height<690?350:382):342)||occupied.some(other=>rect.left<other.right+5&&rect.right>other.left-5&&rect.top<other.bottom+5&&rect.bottom>other.top-5);
       district.label.hidden=hidden;
       if(!hidden){district.label.style.left=`${x}px`;district.label.style.top=`${y}px`;occupied.push(rect);}
     }
@@ -547,7 +568,7 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
     for(const service of baselineServices){
       const point=service.group.position.clone().add(new THREE.Vector3(0,.85,0)).project(camera),x=(point.x+1)/2*width,y=(1-point.y)/2*height;
       const labelWidth=service.type.name.length*5.5+24,rect={left:x-labelWidth/2,right:x+labelWidth/2,top:y-11,bottom:y+11};
-      const hidden=service.district.id!==props.districtId||camera.zoom<2.5||rect.left<10||rect.right>width-10||rect.top<155||rect.bottom>height-(width<761?(height<690?350:382):342)||occupied.some(other=>rect.left<other.right+4&&rect.right>other.left-4&&rect.top<other.bottom+4&&rect.bottom>other.top-4);
+      const hidden=service.district.id!==props.districtId||camera.zoom<2.5||rect.left<10||rect.right>width-10||rect.top<96||rect.bottom>height-(width<761?(height<690?350:382):342)||occupied.some(other=>rect.left<other.right+4&&rect.right>other.left-4&&rect.top<other.bottom+4&&rect.bottom>other.top-4);
       service.label.hidden=hidden;if(!hidden){service.label.style.left=`${x}px`;service.label.style.top=`${y}px`;occupied.push(rect);}
     }
     if(projectFocusLabel){const group=focusedProject&&upgrades.find(item=>item.userData.measureId===focusedProject.measureId&&item.userData.districtId===focusedProject.districtId);projectFocusLabel.hidden=!group;if(group){const point=group.position.clone().add(new THREE.Vector3(0,1.25,0)).project(camera),x=(point.x+1)/2*width,y=(1-point.y)/2*height;projectFocusLabel.textContent=`${props.measureNames?.[focusedProject.measureId]??focusedProject.measureId} · ${districtRecords.find(item=>item.id===focusedProject.districtId)?.name??''}`;projectFocusLabel.style.left=`${x}px`;projectFocusLabel.style.top=`${y}px`;projectFocusLabel.hidden=x<110||x>width-110||y<70||y>height-40;}}
@@ -557,7 +578,7 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
     const width = Math.max(1,canvasHost.clientWidth), height = Math.max(1,canvasHost.clientHeight), aspect = width/height;
     const half = Math.max(home.planHeight * .60, home.planWidth / aspect * .57);
     camera.left = -half * aspect; camera.right = half * aspect; camera.top = half; camera.bottom = -half;
-    const top=width<761?165:153,bottom=width<761?(height<690?350:382):342;
+    const top=width<761?112:92,bottom=width<761?(height<690?350:382):342;
     // Frame the subject in the clear city area, above the physical card deck.
     camera.setViewOffset(width,height,0,(bottom-top)/2,width,height);
     renderer.setSize(width,height,false); placeLabels();
@@ -571,7 +592,7 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
   function resetView(immediate = false) {
     focusedProject=null;if(!home||!controls)return;
     const width=Math.max(1,canvasHost.clientWidth),height=Math.max(1,canvasHost.clientHeight),aspect=width/height;
-    const top=width<761?165:153,bottom=width<761?(height<690?350:382):342;
+    const top=width<761?112:92,bottom=width<761?(height<690?350:382):342;
     const half=Math.max(home.planHeight*.60,home.planWidth/aspect*.57);
     const preview=new THREE.OrthographicCamera(-half*aspect,half*aspect,half,-half,.01,1000);
     preview.position.copy(home.center).add(new THREE.Vector3(home.span*.85,home.span*1.02,home.span*.85));preview.lookAt(home.center);preview.updateMatrixWorld();
@@ -580,6 +601,7 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
     const right=new THREE.Vector3(1,0,0).applyQuaternion(preview.quaternion),up=new THREE.Vector3(0,1,0).applyQuaternion(preview.quaternion);up.y=0;
     const target=home.center.clone().addScaledVector(right,middle.x*half*aspect).addScaledVector(up,middle.y*half/up.lengthSq());
     const zoom=Math.max(.2,Math.min((height-top-bottom)/height*2/size.y,(width-56)/width*2/size.x)*.94);
+    fitZoom=zoom;if(controls)controls.minZoom=zoom*.98;
     moveCamera(target,zoom,immediate);
   }
   function focusDistrict(id) {
@@ -609,7 +631,7 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
     const result = { districts: {}, city: { x: 0, y: 0, visible: false } };
     if (!ready3d || !camera || !home) return result;
     const width = canvasHost.clientWidth, height = canvasHost.clientHeight;
-    const top = width < 761 ? 165 : 153, bottom = width < 761 ? (height < 690 ? 350 : 382) : 342;
+    const top = width < 761 ? 112 : 92, bottom = width < 761 ? (height < 690 ? 350 : 382) : 342;
     const toScreen = (vector) => { const p = vector.clone().project(camera), x = (p.x + 1) / 2 * width, y = (1 - p.y) / 2 * height; return { x, y, visible: p.z > -1 && p.z < 1 && x >= 8 && x <= width - 8 && y >= top && y <= height - bottom }; };
     for (const district of districtRecords) result.districts[district.id] = toScreen(new THREE.Vector3(district.anchor[0], .2, -district.anchor[1]));
     result.city = toScreen(home.center.clone().setY(.2));
@@ -627,6 +649,7 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
     const speed=props.replay?.speed??1;
     if(moving){motionTime+=elapsed*speed;updatePopulation();}
     cityDetails?.update?.({timeSeconds:motionTime,motionEnabled:moving});
+    projectEffects?.tick({timeSeconds:motionTime,motionEnabled:moving});
     if(focusTween){const t=Math.min(1,(now-focusTween.start)/450),e=1-(1-t)**3;controls.target.lerpVectors(focusTween.fromTarget,focusTween.toTarget,e);camera.position.lerpVectors(focusTween.fromPosition,focusTween.toPosition,e);camera.zoom=focusTween.fromZoom+(focusTween.toZoom-focusTween.fromZoom)*e;camera.updateProjectionMatrix();if(t===1)focusTween=null;}
     for(const group of upgrades){
       if(reducedMotion)group.userData.reveal=1;
@@ -635,6 +658,7 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
       group.scale.y=group.userData.scale*(.65+.35*(1-(1-progress)**3));
       if(group.userData.dust){group.userData.dust.visible=progress<1;group.userData.dust.scale.setScalar(1+progress);group.userData.dust.children[0].material.opacity=.7*(1-progress);}
     }
+    if(home&&!focusTween){const limit=home.span*.62,t=controls.target,dx=Math.max(-limit,Math.min(limit,t.x-home.center.x))+home.center.x-t.x,dz=Math.max(-limit,Math.min(limit,t.z-home.center.z))+home.center.z-t.z;if(dx||dz){t.x+=dx;t.z+=dz;camera.position.x+=dx;camera.position.z+=dz;}}
     controls.update();placeLabels();updateReactions(now);renderer.render(scene,camera);frame=requestAnimationFrame(tick);
   }
   function drawFallback() {
@@ -661,7 +685,7 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
       if(resources[0].status==='rejected'||resources[1].status==='rejected'||resources[2].status==='rejected')throw new Error('Map assets or 3D library unavailable');
       THREE=resources[1].value;({OrbitControls}=resources[2].value);
       scene=new THREE.Scene();scene.background=new THREE.Color(0xffffff);camera=new THREE.OrthographicCamera(-20,20,20,-20,.01,1000);renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:'high-performance'});renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.5));renderer.setClearColor(0xffffff,1);renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=.9;canvasHost.append(renderer.domElement);
-      controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.dampingFactor=.1;controls.minPolarAngle=Math.PI*.20;controls.maxPolarAngle=Math.PI*.37;controls.minZoom=.2;controls.maxZoom=6.5*MAP_SCALE;controls.enablePan=true;controls.rotateSpeed=.5;controls.zoomSpeed=.8;controls.addEventListener('start',()=>{focusTween=null;});
+      controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.dampingFactor=.1;controls.minPolarAngle=Math.PI*.20;controls.maxPolarAngle=Math.PI*.37;controls.minZoom=.2;controls.maxZoom=6.5*MAP_SCALE;controls.enablePan=true;controls.screenSpacePanning=false;controls.mouseButtons={LEFT:THREE.MOUSE.PAN,MIDDLE:THREE.MOUSE.DOLLY,RIGHT:THREE.MOUSE.ROTATE};controls.touches={ONE:THREE.TOUCH.PAN,TWO:THREE.TOUCH.DOLLY_ROTATE};controls.rotateSpeed=.5;controls.zoomSpeed=.8;controls.addEventListener('start',()=>{focusTween=null;});
       cityDetails=createCityDetails({THREE,geography,project,groundY:.146,modelScale:1});scene.add(cityDetails.group);
       buildGeography();ready3d=true;raycaster=new THREE.Raycaster();
       let pointerStart,lastHoverTime=0;
@@ -683,6 +707,6 @@ export function createCity({ canvasHost, labelsHost, reactionsHost, fallbackHost
     } catch(error) { ready3d=false;console.warn('Using district fallback:',error.stack ?? error.message);drawFallback(); }
     finally {clearTimeout(timeout);loadingHost.hidden=true;}
   }
-  const api={ready:null,update(next){props={...props,...next};if(typeof next.reducedMotion==='boolean')reducedMotion=next.reducedMotion;if(!MODES.has(props.mode))props.mode='draft';if(props.mode!=='after'||props.paused)clearReactions();if(reducedMotion&&focusTween){controls.target.copy(focusTween.toTarget);camera.position.copy(focusTween.toPosition);camera.zoom=focusTween.toZoom;camera.updateProjectionMatrix();focusTween=null;}updateSelection();updateUpgrades();updateServiceLabels();},focusDistrict,focusProject,focusLandmark,highlightProject,districtAtClientPoint,getPlacementAnchors,setInteractionLocked,resetView:()=>resetView(),dispose(){disposed=true;highlightProject(null);clearReactions();clearUpgrades();baselineServices.forEach(service=>{service.label.remove();scene?.remove(service.group);});cityDetails?.dispose();cancelAnimationFrame(frame);resizeObserver?.disconnect();controls?.dispose();renderer?.dispose();materials.forEach(item=>item.dispose());geometries.forEach(item=>item.dispose());}};
+  const api={ready:null,update(next){props={...props,...next};if(typeof next.reducedMotion==='boolean')reducedMotion=next.reducedMotion;if(!MODES.has(props.mode))props.mode='draft';if(props.mode!=='after'||props.paused)clearReactions();if(reducedMotion&&focusTween){controls.target.copy(focusTween.toTarget);camera.position.copy(focusTween.toPosition);camera.zoom=focusTween.toZoom;camera.updateProjectionMatrix();focusTween=null;}updateSelection();updateUpgrades();projectEffects?.update(props);updateServiceLabels();},focusDistrict,focusProject,focusLandmark,highlightProject,districtAtClientPoint,getPlacementAnchors,setInteractionLocked,resetView:()=>resetView(),dispose(){disposed=true;highlightProject(null);clearReactions();clearUpgrades();baselineServices.forEach(service=>{service.label.remove();scene?.remove(service.group);});projectEffects?.dispose();cityDetails?.dispose();cancelAnimationFrame(frame);resizeObserver?.disconnect();controls?.dispose();renderer?.dispose();materials.forEach(item=>item.dispose());geometries.forEach(item=>item.dispose());}};
   api.ready=init();return api;
 }

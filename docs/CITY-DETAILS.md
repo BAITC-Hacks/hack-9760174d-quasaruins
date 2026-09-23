@@ -42,6 +42,8 @@ Each landmark is a Point feature in `geography.landmarks` with `properties.model
 | `national-museum` | Turquoise blocks with domed tower | 0.58 | 0.9 |
 | `mangilik-el-arch` | Triumphal arch | 0.42 | 0.62 |
 
+`nazarbayev-university`: pale-stone campus blocks around a glass-roofed atrium, a taller dark-glass research block and a front lawn (min 0.9 wide, 0.36 high). It is drawn only where codex-A supplies a sourced point and footprint.
+
 Unknown model ids are skipped (no stand-in model, anchor or reservation), as the contract allows; a missing footprint (Point only, e.g. Kazakh Eli) uses the minimum model size.
 
 ## LRT (Astana Light Metro Line 1)

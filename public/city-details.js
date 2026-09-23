@@ -26,6 +26,7 @@ const LANDMARK_SIZE = {
   'abu-dhabi-plaza': { minSize: 0.46, height: 2.6 },
   'national-museum': { minSize: 0.58, height: 0.9 },
   'mangilik-el-arch': { minSize: 0.42, height: 0.62 },
+  'nazarbayev-university': { minSize: 0.9, height: 0.36 }, // campus blocks of ~5-6 floors around a glazed atrium
 };
 
 function polygonsOf(geometry) {
@@ -348,6 +349,21 @@ export function createCityDetails({ THREE, geography, project, groundY = 0.16, m
       place(shared.box, colors.white, [0, 0.03 + H * 0.84, 0], [size * 0.86, H * 0.18, size * 0.24], parent);
       place(shared.arch, colors.white, [0, 0.03 + H * 0.5, 0], [size * 0.23, size * 0.3, size * 0.5], parent);
       place(shared.box, colors.gold, [0, H - 0.01, 0], [size * 0.3, 0.03, size * 0.1], parent);
+      return { top: H + 0.03 };
+    },
+    // Nazarbayev University: low pale-stone campus blocks around a glass-roofed central atrium, a taller
+    // research block in dark glazing, and a front lawn. Placed only where A supplies a sourced point/footprint.
+    'nazarbayev-university'(parent, size, H) {
+      const w = size, d = size * 0.72, block = H * 0.78;
+      place(shared.box, colors.grass, [0, 0.012, d * 0.5], [w * 0.92, 0.024, d * 0.3], parent);
+      place(shared.box, colors.stone, [0, 0.02, -d * 0.08], [w, 0.04, d * 0.72], parent);
+      place(shared.box, colors.white, [0, 0.04 + block / 2, -d * 0.36], [w * 0.92, block, d * 0.16], parent);
+      place(shared.box, colors.white, [0, 0.04 + block * 0.42, d * 0.16], [w * 0.92, block * 0.84, d * 0.14], parent);
+      for (const side of [-1, 1]) place(shared.box, colors.white, [side * w * 0.39, 0.04 + block / 2, -d * 0.1], [w * 0.14, block, d * 0.4], parent);
+      place(shared.box, colors.glass, [0, 0.04 + block * 0.86, -d * 0.1], [w * 0.64, 0.025, d * 0.38], parent);
+      place(shared.dome, colors.glass, [0, 0.04 + block * 0.88, -d * 0.1], [w * 0.2, H * 0.22, d * 0.14], parent);
+      place(shared.box, colors.darkGlass, [w * 0.3, 0.04 + H * 0.5, -d * 0.36], [w * 0.18, H, d * 0.17], parent);
+      for (let i = 0; i < 6; i += 1) place(shared.box, colors.stone, [(-0.35 + i * 0.14) * w, 0.04 + block * 0.4, d * 0.235], [0.012, block * 0.8, 0.012], parent);
       return { top: H + 0.03 };
     },
   };
