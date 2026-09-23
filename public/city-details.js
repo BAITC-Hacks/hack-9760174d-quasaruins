@@ -443,6 +443,10 @@ export function createCityDetails({ THREE, geography, project, groundY = 0.16 })
     });
   }
   animate(0);
+  // Scene-clock hook: the caller passes its own paused/reduced-motion-aware time. Without motion the train stays put.
+  function update({ timeSeconds = 0, motionEnabled = true } = {}) {
+    if (motionEnabled && Number.isFinite(timeSeconds)) animate(timeSeconds);
+  }
 
   function isReserved(point, clearance = 0) {
     if (!Array.isArray(point) || !Number.isFinite(point[0]) || !Number.isFinite(point[1])) return false;
@@ -472,5 +476,5 @@ export function createCityDetails({ THREE, geography, project, groundY = 0.16 })
     group.clear();
   }
 
-  return { group, landmarkAnchors, stationAnchors, isReserved, animate, dispose, treeCount: trees.length };
+  return { group, landmarkAnchors, stationAnchors, isReserved, update, animate, dispose, treeCount: trees.length };
 }

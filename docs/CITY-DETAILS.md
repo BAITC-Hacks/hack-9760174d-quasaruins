@@ -11,7 +11,8 @@ scene.add(details.group);
 details.landmarkAnchors; // [{ id, name, position: [x, y, z] }] label points above each model
 details.stationAnchors;  // [{ id, name, position }] above each LRT station (empty without an LRT layer)
 details.isReserved([east, north], clearance); // true inside/near a park, landmark, LRT corridor or station
-details.animate(seconds); // optional: moves the LRT train along the line; skip under reduced motion
+details.update({ timeSeconds, motionEnabled }); // moves the LRT train with the scene clock; no motion keeps it still
+details.animate(seconds); // same, low level
 details.dispose(); // frees geometries/materials, detaches and empties the group
 ```
 
