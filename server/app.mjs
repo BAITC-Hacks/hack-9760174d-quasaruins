@@ -48,9 +48,15 @@ export function createAppServer({root=ROOT,apiKey=process.env.OPENAI_API_KEY,mod
         if (req.method==='GET' && path==='/api/health') return send(200,{ok:true,aiConfigured:Boolean(apiKey),model,datasetVersion:DATASET.version});
         if (req.method==='GET' && path==='/api/dataset') return send(200,{dataset:DATASET,examplePlan:EXAMPLE_PLAN,baseline:BASELINE});
         if (req.method==='GET' && path==='/api/geography') {
-          geoPromise??=readFile(resolve(root,'data/astana.json')).then(raw=>({raw,gzip:gzipSync(raw)})).catch(error=>{geoPromise=undefined;throw error;});
+          geoPromise??=Promise.all(['astana.json','city-details.json'].map(name=>readFile(resolve(root,'data',name),'utf8')))
+            .then(([baseRaw,detailsRaw])=>{
+              const base=JSON.parse(baseRaw),details=JSON.parse(detailsRaw);
+              const raw=Buffer.from(JSON.stringify({...base,landmarks:details.landmarks,parks:details.parks,
+                credit:base.credit+' '+details.credit,attributionUrl:details.attributionUrl,detailsNotice:details.notice}));
+              return {raw,gzip:gzipSync(raw)};
+            }).catch(error=>{geoPromise=undefined;throw error;});
           const geo=await geoPromise,compressed=/\bgzip\b/.test(req.headers['accept-encoding']||'');
-          res.writeHead(200,{'Content-Type':types['.json'],'Cache-Control':'public, max-age=3600','Vary':'Accept-Encoding',...(compressed?{'Content-Encoding':'gzip'}:{})});
+          res.writeHead(200,{'Content-Type':types['.json'],'Cache-Control':'no-cache','Vary':'Accept-Encoding',...(compressed?{'Content-Encoding':'gzip'}:{})});
           return res.end(compressed?geo.gzip:geo.raw);
         }
         if (req.method!=='POST' || !['/api/simulate','/api/suggest','/api/advice'].includes(path)) throw fail(404,'API endpoint not found.');

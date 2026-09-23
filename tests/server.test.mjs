@@ -44,7 +44,18 @@ test('real offline geography has all six districts and explicit model distinctio
   const geo=await response.json();assert.equal(geo.districts.features.length,6);
   assert.equal(geo.districts.features.find(f=>f.properties.id==='sarayshyk').properties.modeled,false);
   assert.equal(geo.roads.features.length,1930);assert.equal(geo.water.features.length,1135);
-  for(const layer of ['districts','water'])for(const f of geo[layer].features) {
+  assert.equal(geo.landmarks.features.length,4);assert.equal(geo.parks.features.length,3);
+  assert.match(geo.credit,/OpenStreetMap/);assert.equal(geo.attributionUrl,'https://www.openstreetmap.org/copyright');
+  // Catch coordinate order/orientation errors that would move the landmarks
+  // off the central axis or swap the palace to the opposite river bank.
+  const landmark=id=>geo.landmarks.features.find(f=>f.properties.id===id).geometry.coordinates;
+  assert.ok(landmark('khan-shatyr')[0]<landmark('bayterek')[0]);
+  assert.ok(landmark('bayterek')[0]<landmark('ak-orda')[0]);
+  assert.ok(landmark('ak-orda')[0]<landmark('peace-palace')[0]);
+  for(const f of [...geo.landmarks.features,...geo.parks.features]) {
+    assert.equal(f.properties.scored,false);assert.match(f.properties.sourceUrl,/^https:/);
+  }
+  for(const layer of ['districts','water','parks'])for(const f of geo[layer].features) {
     const polygons=f.geometry.type==='Polygon'?[f.geometry.coordinates]:f.geometry.coordinates;
     for(const polygon of polygons)for(const ring of polygon) {
       assert.ok(ring.length>=4,'Every polygon ring needs at least four coordinates.');

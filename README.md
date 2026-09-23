@@ -91,7 +91,7 @@ Tests compare dataset fields, baseline and reference plans against an independen
 
 ## Geography and limits
 
-The official Astana public geoportal provides the real geographic backdrop. Road and water geometry is simplified for display. Current Astana has six districts; the challenge supplies five synthetic scoring rows. **Sarayshyk is outside this scenario**, without invented metrics or redistributed population shares. Buildings and project sites are illustrative, not surveyed properties. Cars, pedestrians and emoji reactions do not represent real behavior predictions.
+The official Astana public geoportal provides the district, road and water backdrop. Road and water geometry is simplified for display. The geography API also supplies four landmark footprints/positions and three real park boundaries, with municipal and OpenStreetMap sources attributed separately. Current Astana has six districts; the challenge supplies five synthetic scoring rows. **Sarayshyk is outside this scenario**, without invented metrics or redistributed population shares. Ordinary buildings, project sites and landmark vertical forms are illustrative. Cars, pedestrians and emoji reactions do not represent real behavior predictions.
 
 Costs are virtual units. This is not financial ROI, a real traffic model, measured happiness or a validated policy forecast. No individual resident data is used. All geographic source links and processing details are in [data/README.md](data/README.md).
 
