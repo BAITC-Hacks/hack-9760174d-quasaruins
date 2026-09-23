@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#F5F4EF">
+  <title>Akim Lab — One city, two futures</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script type="importmap">{"imports":{"three":"/vendor/three.module.js"}}</script>
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#project-library">Skip to project library</a>
+  <header class="app-header">
+    <a class="brand" href="/" aria-label="Akim Lab home"><span class="brand-mark" aria-hidden="true">a<span>·</span></span><span><strong>akim<span class="brand-light">lab</span></strong><small>ASTANA CITY SIMULATOR</small></span></a>
+    <div class="header-note"><span class="live-dot"></span> Your city. Your five decisions.</div>
+    <div class="header-actions"><button id="load-example" class="button subtle" disabled>Try an example</button><button id="undo" class="button icon-button" disabled title="Undo last plan edit" aria-label="Undo last plan edit">↶</button><button id="reset-plan" class="button subtle" disabled>Reset plan</button></div>
+  </header>
+
+  <main id="app" aria-busy="true">
+    <section class="planning-bar" aria-label="Plan and budget">
+      <div class="budget-block"><div class="eyebrow">YOUR BUDGET</div><div class="budget-number"><strong id="spent">0</strong><span>/ 100</span></div><div class="budget-track" role="progressbar" aria-label="Budget used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="budget-fill"></span></div><small id="remaining">100 units available</small></div>
+      <div class="plan-block"><div class="plan-heading"><span class="eyebrow">FIVE DECISIONS, ONE FUTURE</span><span id="slot-count">0 / 5 selected</span></div><div id="plan-slots" class="plan-slots" aria-label="Selected projects"></div></div>
+      <div class="run-block"><button id="apply-plan" class="button primary run-button" disabled><span>Simulate my city</span><span aria-hidden="true">↗</span></button><span id="plan-hint">Choose five projects to begin</span></div>
+    </section>
+
+    <div id="app-message" class="app-message" role="status" aria-live="polite">Loading the city model…</div>
+
+    <div class="workspace">
+      <aside class="library panel" id="project-library" aria-labelledby="library-title">
+        <div class="panel-heading"><div><span class="eyebrow">01 / MAKE YOUR CHOICES</span><h1 id="library-title">Project library</h1></div><span id="project-total" class="count-badge">14</span></div>
+        <label class="target-label" for="target-district">Place district projects in</label><select id="target-district" disabled aria-describedby="target-help"></select><p id="target-help" class="help">Choose here or select a district on the city.</p>
+        <div id="category-filters" class="category-filters" aria-label="Filter projects by category"></div>
+        <div id="projects" class="project-list"><p class="empty-copy">The project catalog is loading.</p></div>
+        <div class="library-foot">Up to 2 projects per category.<br>City-wide projects cover all five modeled districts.</div>
+      </aside>
+
+      <section class="city-column" aria-labelledby="city-title">
+        <div class="city-intro"><div><span class="eyebrow">A SMALL CITY. A BIG RESPONSIBILITY.</span><h2 id="city-title">One city, two futures.</h2><p>Build a better everyday life, one decision at a time.</p></div><span class="model-tag">8-quarter scenario</span></div>
+        <div class="city-stage">
+          <div class="scene-topline"><span id="scene-state" class="scene-state">BASELINE CITY</span><div class="scene-tools"><button id="reset-view" class="map-button" aria-label="Fit the whole city" title="Fit the whole city">⌖ <span>Fit city</span></button><button id="pause-city" class="map-button" aria-pressed="false">Pause motion</button></div></div>
+          <div id="city-canvas" class="city-canvas" aria-label="Isometric Astana city visualization"></div>
+          <div id="city-labels" class="city-labels"></div>
+          <div id="city-fallback" class="city-fallback" hidden></div>
+          <div id="scene-loading" class="scene-loading"><span class="loading-orbit" aria-hidden="true"></span><span>Preparing your miniature city…</span></div>
+          <div class="map-caption"><span><span class="legend-square"></span> Real geography · representative buildings</span><span>Drag to orbit · scroll to zoom</span></div>
+        </div>
+        <div id="district-shortcuts" class="district-shortcuts" aria-label="Focus a district"></div>
+        <div class="comparison-bar"><div class="view-switch" aria-label="Compare city views"><button data-view="before" aria-pressed="false">Before</button><button data-view="after" aria-pressed="true">Your plan</button><button id="view-a" data-view="a" aria-pressed="false" disabled>Plan A</button></div><button id="pin-plan" class="button subtle" disabled>Pin as Plan A <span aria-hidden="true">＋</span></button></div>
+        <p id="scene-description" class="scene-description">Choose projects to preview their locations. Buildings and placement are illustrative.</p>
+      </section>
+
+      <aside class="inspector panel" aria-labelledby="results-title">
+        <div class="panel-heading"><div><span class="eyebrow">02 / SEE THE IMPACT</span><h2 id="results-title">Your city, explained</h2></div></div>
+        <div id="validation" class="validation"></div>
+        <section id="headline-result" class="headline-result" aria-live="polite"></section>
+        <div id="district-results" class="district-results"></div>
+        <details id="score-evidence" class="evidence"><summary>How the score is calculated</summary><div id="score-breakdown"></div></details>
+        <section class="district-detail"><div class="section-heading"><h3 id="focus-name">District indicators</h3><span id="focus-share"></span></div><div id="indicator-list" class="indicator-list"></div></section>
+        <section class="adviser-section" aria-labelledby="adviser-title"><div class="section-heading"><h3 id="adviser-title">A second perspective</h3><span class="adviser-badge">AI ADVISER</span></div><p class="help">Get an explanation grounded in your calculated plan.</p><div class="adviser-actions"><button id="get-advice" class="button" disabled>Explain my plan</button><button id="get-improvement" class="button subtle" disabled>Find one improvement</button></div><div id="adviser-output" class="adviser-output" aria-live="polite"></div><div id="suggestion-output"></div></section>
+        <div class="report-actions"><button id="export-plan" class="button subtle" disabled>Export plan JSON</button><button id="print-plan" class="button subtle" disabled>Print</button></div>
+      </aside>
+    </div>
+  </main>
+  <footer class="app-footer"><span>Made for a city worth caring about.</span><details><summary>About the scenario &amp; map</summary><p>Organizer-supplied synthetic effects and district indicators. This is a decision simulator, not a prediction of real policy outcomes. The real geographic backdrop includes Sarayshyk, which is outside the five-district scenario. Buildings, project locations, vehicles and reactions are illustrative.</p><p id="geography-credit">Geography: Astana public geoportal. Sources and limitations are documented with the application.</p></details><span class="footer-mark">AKIM LAB / HACKALEM</span></footer>
+</body>
+</html>
