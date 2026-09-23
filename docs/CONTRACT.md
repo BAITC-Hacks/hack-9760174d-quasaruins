@@ -5,8 +5,8 @@ Shared modules must not use Node APIs so the same functions run in browser and s
 
 ## Ownership
 
-- codex-A: `shared/**`, `server/**`, `data/**`, `scripts/**`, `public/vendor/**`, `tests/engine.test.mjs`, `tests/server.test.mjs`, configuration/manifests, README, this contract and integration. After codex-b hands off the current city-life checkpoint, A owns `public/city.js` for scene integration/construction visuals.
-- codex-b: next checkpoint owns `public/index.html`, `public/styles.css`, `public/app.js`, and `docs/FRONTEND.md` for the full-screen HUD and replay controls. Preserve and commit the already-written city-life changes before transferring scene ownership to A. Read the shared STYLE-GUIDE.md before starting.
+- codex-A: `shared/**`, `server/**`, `data/**`, `scripts/**`, `public/vendor/**`, `tests/engine.test.mjs`, `tests/server.test.mjs`, configuration/manifests, README, this contract and integration. R04 expands sourced geographic data; do not edit `public/city.js` while B owns R05.
+- codex-b: R05 owns `public/city.js` and `docs/FRONTEND.md` for representative existing service buildings at quarter zero and related project upgrades. Preserve the integrated construction/replay behavior. HUD source stays unchanged unless a concrete integration defect requires a bounded correction. Read the shared STYLE-GUIDE.md before starting.
 - claude: next checkpoint builds `public/city-details.js` and `docs/CITY-DETAILS.md`. Review files remain `test/acceptance/**`, `tests/acceptance.test.mjs`, `docs/ACCEPTANCE.md`, `docs/REVIEW.md`, but the immediate assignment is building the map-detail module. No edits to other public files.
 
 ### Immediate scene integration contract
@@ -24,6 +24,32 @@ accepts `[eastKm,northKm]` and detects park/landmark interiors or boundary dista
 within `clearance` kilometers, including an enlarged visible landmark base.
 `dispose()` releases the module's own geometries/materials. A wires this module
 into `city.js`; B must not duplicate it.
+
+### Expanded mapped backdrop — R04/R05/R06
+
+Landmark Point properties retain the same schema. Additional model IDs are
+`hazret-sultan`, `nur-alem`, `kazakh-eli`, `astana-opera`, `concert-hall`,
+`astana-arena`, `abu-dhabi-plaza`, `grand-mosque`, `national-museum`, and
+`mangilik-el-arch`. A supplies only verified coordinates, with attributed
+footprints where available. Missing layers and unknown model IDs are safe to skip.
+Enlarged landmark forms must reserve their visible base and stay recognizable.
+
+Optional `geography.lrt` has `{line,stations}`: a LineString/MultiLineString
+FeatureCollection and a Point FeatureCollection with properties `{id,name,
+scored:false,sourceUrl,attribution,licenseUrl?}`. Lines carry the same provenance.
+Geometry is a real mapped backdrop, independent of synthetic intervention M3.
+Neither existing landmarks nor LRT add benefits, measures or scores.
+
+The details module may return `update({timeSeconds,motionEnabled})` to animate
+one decorative train. B calls it from the scene's existing clock; that clock
+stops when paused or reduced motion is active. `isReserved` also covers the LRT
+corridor, and `dispose()` releases its resources. Keep the 90-tree cap and mapped
+water/landmark exclusions.
+
+Baseline service forms appear in every modeled district before any project.
+These placements remain illustrative, separate from mapped landmarks. Projects
+add or upgrade their relevant service forms using shared replay/result state.
+Existing services do not disappear when a plan is edited, reset, or compared.
 
 The existing `city.update` gains optional `replay:{quarter,completedMeasureIds,running,speed}`.
 B owns the replay clock and passes the shared frame's `result` through the

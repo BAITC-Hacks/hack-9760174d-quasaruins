@@ -52,7 +52,7 @@ export function createAppServer({root=ROOT,apiKey=process.env.OPENAI_API_KEY,mod
           geoPromise??=Promise.all(['astana.json','city-details.json'].map(name=>readFile(resolve(root,'data',name),'utf8')))
             .then(([baseRaw,detailsRaw])=>{
               const base=JSON.parse(baseRaw),details=JSON.parse(detailsRaw);
-              const raw=Buffer.from(JSON.stringify({...base,landmarks:details.landmarks,parks:details.parks,
+              const raw=Buffer.from(JSON.stringify({...base,landmarks:details.landmarks,parks:details.parks,lrt:details.lrt,
                 credit:base.credit+' '+details.credit,attributionUrl:details.attributionUrl,detailsNotice:details.notice}));
               return {raw,gzip:gzipSync(raw)};
             }).catch(error=>{geoPromise=undefined;throw error;});
