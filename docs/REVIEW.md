@@ -33,3 +33,13 @@ Visual consistency (after functional checks): same color meaning, legends and la
 - Baseline merged: bfa1e7f (contract). Oracle commit 3fd240a preserved.
 - `tests/acceptance.test.mjs` written against docs/CONTRACT.md. shared/city-data.js, shared/simulation.js, shared/optimizer.js and server/main.mjs are not in the baseline yet, so every suite currently reports SKIP with the missing file named. Not yet run against the real engine.
 - Harness validated against a throwaway contract-shaped engine kept outside the repository: 47 of 47 tests pass; a mutant that scales synergies by delay fails 11 tests, so the checks are sensitive. HTTP suite not yet exercised (no server to run against).
+
+### 2026-09-23 10:35 UTC, main 4ad4a07 (integrated backend, AI and playable frontend)
+
+- `node --test`: 71/71 pass, 0 skipped, both in the reviewer worktree and in a clean `git archive` export with no install.
+- End to end in headless Chromium (software WebGL), port 3002, AI offline: baseline 52.56 labelled as reference; published example 56.54 (+3.99, unrounded-difference note shown); offline explanation labelled; one-change suggestion 57.21 (+0.66: clean fuel in Saryarka replaced by light rail in Nura), applied only on click, result 57.21. No console errors, no failed requests, no horizontal scroll at 390 px, 3D scene renders, Sarayshyk labelled outside the scenario.
+- Server review: binds to 127.0.0.1, checks Host and Origin, blocks dotfiles, traversal and symlink escape, requires JSON with a size limit, keeps the key server-side and honours an explicitly empty key. Live adviser selects from server-verified facts through a strict schema, 25 s timeout, no storage.
+- Secret scan of every commit on every branch: no keys or partner credentials; only `.env.example` is tracked; no file over 2 MB.
+- README walkthrough numbers reproduce (95 / 56.54 and 100 / 57.21).
+- Finding (minor, server/adviser.mjs): offline text reads "1 synergy bonus apply"; should be "applies".
+- Not yet reviewable: full-screen HUD redesign, quarter-by-quarter timeline helper and `/api/speech`. Tests for the timeline (quarter 0 = baseline, quarter 8 = official score for every plan) will be added when the helper lands.
