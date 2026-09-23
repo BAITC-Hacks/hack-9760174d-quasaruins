@@ -28,7 +28,7 @@ details.dispose(); // frees geometries/materials, detaches and empties the group
 
 Heights are stylized to the existing buildings (0.3 to 1.55 scene units). Real footprints of Bayterek, Ak Orda and the Palace are only 17 to 115 m across, so each model is enlarged to the minimum sizes above; the mapped point stays at the centre.
 
-Parks (`botanical-garden`, `central-park`, `presidential-park`): a flat light-green surface from the real polygon (holes and MultiPolygons supported) at `groundY + 0.004`, a green outline at `groundY + 0.008`, and 90 trees in total, split by park area with a fixed seed, kept away from park edges and landmark models. Two instanced meshes draw all trees. The park surface uses a positive polygon offset so water drawn at the same height (0.151 in the app) stays visible inside parks.
+Parks (`botanical-garden`, `central-park`, `presidential-park`): a flat light-green surface from the real polygon (holes and MultiPolygons supported) at `groundY + 0.004`, a green outline at `groundY + 0.008`, and 90 trees in total, split by park area with a fixed seed. Tree centres stay out of mapped water (plus 0.02 km), 0.03 km inside park edges and 0.18 km beyond any landmark model; quota a park cannot fill moves to the next park. Two instanced meshes draw all trees. The park surface uses a positive polygon offset so water drawn at the same height (0.151 in the app) stays visible inside parks.
 
 ## isReserved
 
