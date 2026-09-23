@@ -114,13 +114,15 @@ const projectPaths = {
  M13:'M5 35V18h13v17 M18 35V8h19v27 M24 13h7 M24 20h7 M24 27h7 M10 23h3 M10 29h3 M23 8V3 M31 8V3',
  M14:'M3 15h24v16H3z M27 20h8l5 7v4H27 M8 31v4 M33 31v4 M9 22h10 M14 17v10 M32 22v5h7'
 };
+const projectArtwork = new Map();
 function projectArt(id) {
+ if(projectArtwork.has(id))return projectArtwork.get(id);
  const host=node('span','project-art',null,{'aria-hidden':'true'}), svg=document.createElementNS('http://www.w3.org/2000/svg','svg'), path=document.createElementNS(svg.namespaceURI,'path');
  svg.setAttribute('viewBox','0 0 44 40');path.setAttribute('d',projectPaths[id]);svg.append(path);
  const artwork=node('img','project-illustration',null,{alt:'',src:`/assets/projects/${id}.png`,decoding:'async',draggable:'false'});
  artwork.addEventListener('load',()=>host.classList.add('art-loaded'));
  artwork.addEventListener('error',()=>artwork.remove());
- host.append(svg,artwork);return host;
+ host.append(svg,artwork);projectArtwork.set(id,host);return host;
 }
 function highlightCard(id) {
  const measure=measures.get(id);
