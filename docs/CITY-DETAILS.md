@@ -17,24 +17,25 @@ details.dispose(); // frees geometries/materials, detaches and empties the group
 ```
 
 - `project([lon, lat]) -> [eastKm, northKm]` is the scene's own projection; Three.js `x = east`, `z = -north`.
+- `modelScale` (default 1) scales every landmark model and its reserved radius. Positions always come from `project`, so a larger map projection spreads landmarks apart while models keep their size; lower `modelScale` if landmarks crowd each other.
 - The module only builds and returns `group`. It does not touch the scene, DOM or app state.
 - Missing layers give nothing to draw and `isReserved()` returns `false` for them.
 
 ## Landmarks
 
-Each landmark is a Point feature in `geography.landmarks` with `properties.model` (optional `footprint` polygon). Known models. Heights follow approximate real heights at about 1 scene unit per 100 m, so landmarks stay in proportion to each other (Abu Dhabi Plaza, about 320 m, is compressed to 2.6). Footprints are enlarged for readability; heights are not:
+Each landmark is a Point feature in `geography.landmarks` with `properties.model` (optional `footprint` polygon). Known models. Shapes follow the real buildings first (silhouette, domes, colonnades, cable net, geodesic panels); heights are roughly 1 scene unit per 100 m and footprints are enlarged for readability:
 
 | Model id | Look | Min footprint (km) | Height |
 | --- | --- | --- | --- |
-| `bayterek` | White tower, 16-rod lattice, gold orb (about 97 m) | 0.26 | 1.0 |
-| `khan-shatyr` | Tilted tent with cable rings and mast | 0.64 | 1.5 |
-| `ak-orda` | White palace, colonnade, blue dome, gold spire | 0.58 | 0.8 |
-| `peace-palace` | Stone pyramid, glass bands and apex | 0.62 | 0.62 |
-| `hazret-sultan` | Turquoise dome, four minarets | 0.58 | 0.78 |
+| `bayterek` | White column trunk, branches flaring out to cradle a gold sphere, plaza with ring pool (about 97 m) | 0.26 | 1.0 |
+| `khan-shatyr` | Wide, low tent with concave sides and an off-centre apex, diamond cable net, tilted mast | 1.00 | 0.78 |
+| `ak-orda` | White palace with wings and colonnade, columned drum, light-blue dome with gold ribs, gold spire | 0.58 | 0.8 |
+| `peace-palace` | Granite pyramid on a grassy mound, facade grid, gold stained-glass apex | 0.62 | 0.62 |
+| `hazret-sultan` | White mosque, turquoise main dome with crescent, corner domes, four minarets with balconies | 0.58 | 0.78 |
 | `grand-mosque` | Large blue dome, four tall minarets | 0.66 | 1.3 |
-| `nur-alem` | Glass sphere with rings on a base | 0.52 | 1.0 |
-| `kazakh-eli` | White column with gold bird | 0.30 | 0.91 |
-| `astana-opera` | Colonnaded hall with dome | 0.58 | 0.5 |
+| `nur-alem` | Glass sphere of triangular panels sitting on a low base | 0.80 | 1.0 |
+| `kazakh-eli` | Tapering white stele, bronze relief ring, gold Samruk bird | 0.30 | 0.91 |
+| `astana-opera` | Neoclassical hall, eight-column portico, triangular pediment with gold quadriga, stage house behind | 0.58 | 0.5 |
 | `concert-hall` | Fan of turquoise petals | 0.62 | 0.55 |
 | `astana-arena` | Oval stadium with roof ring | 0.82 | 0.5 |
 | `abu-dhabi-plaza` | Glass tower cluster | 0.46 | 2.6 |

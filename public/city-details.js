@@ -13,12 +13,12 @@ const LANDMARK_SIZE = {
   // 1 unit per 100 m, so landmarks keep their true proportions to each other (Abu Dhabi Plaza, ~320 m, is compressed).
   // Footprints are enlarged for readability; heights are not exaggerated.
   'bayterek': { minSize: 0.26, height: 1.0 },       // ~97 m
-  'khan-shatyr': { minSize: 0.64, height: 1.5 },    // ~150 m
+  'khan-shatyr': { minSize: 1.0, height: 0.78 },    // ~150 m on a ~200 m base: wider than tall, concave leaning tent
   'ak-orda': { minSize: 0.58, height: 0.8 },        // ~80 m with spire
   'peace-palace': { minSize: 0.62, height: 0.62 },  // ~62 m
   'hazret-sultan': { minSize: 0.58, height: 0.78 }, // minarets ~77 m
   'grand-mosque': { minSize: 0.66, height: 1.3 },   // minarets ~130 m
-  'nur-alem': { minSize: 0.52, height: 1.0 },       // ~100 m
+  'nur-alem': { minSize: 0.8, height: 1.0 },        // ~100 m, 80 m sphere
   'kazakh-eli': { minSize: 0.3, height: 0.91 },     // ~91 m
   'astana-opera': { minSize: 0.58, height: 0.5 },
   'concert-hall': { minSize: 0.62, height: 0.55 },
@@ -77,7 +77,8 @@ function seededRandom(text) {
   return () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
 }
 
-export function createCityDetails({ THREE, geography, project, groundY = 0.16 }) {
+export function createCityDetails({ THREE, geography, project, groundY = 0.16, modelScale = 1 }) {
+  const scaleModels = Number.isFinite(modelScale) && modelScale > 0 ? modelScale : 1;
   if (!THREE || typeof project !== 'function') throw new Error('createCityDetails needs THREE and a project([lon, lat]) function.');
   const group = new THREE.Group();
   group.name = 'city-details';
@@ -97,17 +98,26 @@ export function createCityDetails({ THREE, geography, project, groundY = 0.16 })
     torus: own(new THREE.TorusGeometry(1, 0.06, 8, 40), ownedGeometries),
     arch: own(new THREE.TorusGeometry(1, 0.16, 8, 24, Math.PI), ownedGeometries),
     octa: own(new THREE.CylinderGeometry(1, 1, 1, 8), ownedGeometries),
+    rib: own(new THREE.TorusGeometry(1, 0.035, 4, 20, Math.PI), ownedGeometries),
+    prism: own(new THREE.CylinderGeometry(1, 1, 1, 3), ownedGeometries),
+    stele: own(new THREE.CylinderGeometry(0.62, 1, 1, 4), ownedGeometries),
+    mound: own(new THREE.CylinderGeometry(0.62, 0.72, 1, 4), ownedGeometries),
   };
   const colors = {
     white: material(0xf7f4ec), stone: material(0xe6dccb), gold: material(0xd8a73c, { metalness: 0.45, roughness: 0.35 }),
     blue: material(0x3f7fb5, { metalness: 0.2, roughness: 0.4 }), glass: material(0xb8d6d7, { metalness: 0.25, roughness: 0.25 }),
-    tent: material(0xefe9dc, { transparent: true, opacity: 0.93 }), mast: material(0xd6d0c4),
+    tent: material(0xf1ead8, { transparent: true, opacity: 0.9, side: THREE.DoubleSide }), mast: material(0xd6d0c4),
+    water: material(0x82cddd, { roughness: 0.3 }), grass: material(0x9cc58a, { roughness: 1 }), bronze: material(0x9c7a4b, { metalness: 0.4, roughness: 0.5 }),
+    skyDome: material(0x62a8d8, { metalness: 0.2, roughness: 0.35 }), apexGold: material(0xf2c14e, { metalness: 0.3, roughness: 0.3, transparent: true, opacity: 0.95 }),
     park: material(0xcfe2c1, { roughness: 1, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }),
     trunk: material(0xb29c7e), crown: material(0x4b9562),
     turquoise: material(0x2f9fb3, { metalness: 0.25, roughness: 0.35 }), darkGlass: material(0x5d7f8f, { metalness: 0.35, roughness: 0.25 }),
     field: material(0x8fc27a, { roughness: 1 }), deck: material(0xd9dfe0), stripe: material(0x1f6fb2), train: material(0xfbfbf7),
   };
   const outlineMaterial = own(new THREE.LineBasicMaterial({ color: 0x4b9562, transparent: true, opacity: 0.85 }), ownedMaterials);
+  const cableMaterial = own(new THREE.LineBasicMaterial({ color: 0xb9b09c }), ownedMaterials);
+  const gridMaterial = own(new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 }), ownedMaterials);
+  const seamMaterial = own(new THREE.LineBasicMaterial({ color: 0xcfc6b4 }), ownedMaterials);
 
   const place = (geometry, mat, [x, y, z], [sx, sy, sz], parent) => {
     const mesh = new THREE.Mesh(geometry, mat);
@@ -133,69 +143,122 @@ export function createCityDetails({ THREE, geography, project, groundY = 0.16 })
     ringAt(parent, 0.034, H * 0.62, colors.white, 1.2);
     place(shared.cone, cap, [x, H * 0.92, z], [0.028, H * 0.16, 0.028], parent);
   };
+  const lineSet = (parent, points, mat) => {
+    const geo = own(new THREE.BufferGeometry(), ownedGeometries);
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
+    const lines = new THREE.LineSegments(geo, mat); parent.add(lines); return lines;
+  };
   const builders = {
+    // Bayterek: round white pavilion on a plaza with a ring pool, a trunk of slender white columns, and curved
+    // branches that fan out and cradle a gold sphere (sphere about a quarter of the height).
     'bayterek'(parent, size, H) {
-      place(shared.cylinder, colors.stone, [0, 0.025, 0], [size * 0.5, 0.05, size * 0.5], parent);
-      ringAt(parent, size * 0.42, 0.055, colors.white, 1.5);
-      const trunkTop = H * 0.62;
-      place(shared.taper, colors.white, [0, 0.05 + trunkTop / 2, 0], [0.05, trunkTop, 0.05], parent);
-      const orbY = H * 0.84, spread = 0.15;
-      for (let i = 0; i < 16; i += 1) {
-        const a = (i / 16) * Math.PI * 2, c = Math.cos(a), n = Math.sin(a);
-        rod(parent, [c * 0.035, trunkTop, n * 0.035], [c * spread, orbY, n * spread], 0.007, colors.white);
-        rod(parent, [c * spread, orbY, n * spread], [c * 0.02, H, n * 0.02], 0.006, colors.white);
+      place(shared.cylinder, colors.stone, [0, 0.02, 0], [size * 0.5, 0.04, size * 0.5], parent);
+      place(shared.cylinder, colors.water, [0, 0.043, 0], [size * 0.42, 0.006, size * 0.42], parent);
+      place(shared.cylinder, colors.white, [0, 0.075, 0], [size * 0.2, 0.07, size * 0.2], parent);
+      const r = H * 0.115, sphereY = H - r * 1.25, trunkTop = sphereY - r * 1.35;
+      place(shared.octa, colors.white, [0, 0.11 + (trunkTop - 0.11) / 2, 0], [0.018, trunkTop - 0.11, 0.018], parent);
+      for (let i = 0; i < 10; i += 1) {
+        const a = (i / 10) * Math.PI * 2;
+        rod(parent, [Math.cos(a) * 0.032, 0.11, Math.sin(a) * 0.032], [Math.cos(a) * 0.022, trunkTop, Math.sin(a) * 0.022], 0.006, colors.white);
       }
-      ringAt(parent, spread * 0.8, H * 0.76, colors.white, 1.2);
-      ringAt(parent, spread, orbY, colors.white, 1.2);
-      place(shared.sphere, colors.gold, [0, orbY, 0], [0.12, 0.12, 0.12], parent);
+      for (let i = 0; i < 20; i += 1) {
+        const a = (i / 20) * Math.PI * 2, c = Math.cos(a), n = Math.sin(a);
+        const curve = new THREE.CubicBezierCurve3(
+          new THREE.Vector3(c * 0.02, trunkTop, n * 0.02),
+          new THREE.Vector3(c * r * 1.35, trunkTop + r * 0.1, n * r * 1.35),
+          new THREE.Vector3(c * r * 1.6, sphereY - r * 0.15, n * r * 1.6),
+          new THREE.Vector3(c * r * 1.08, sphereY + r * 0.95, n * r * 1.08));
+        const branch = new THREE.Mesh(own(new THREE.TubeGeometry(curve, 10, 0.006, 5, false), ownedGeometries), colors.white);
+        branch.castShadow = true; parent.add(branch);
+      }
+      place(shared.sphere, colors.gold, [0, sphereY, 0], [r, r, r], parent);
       return { top: H + 0.03 };
     },
+    // Khan Shatyr: a leaning transparent tent on an elliptical base, wrapped in a diamond cable net, with a tilted mast.
     'khan-shatyr'(parent, size, H, extent) {
-      const sx = Math.max(extent.width, size) / 2, sz = Math.max(extent.depth, size * 0.92) / 2, tent = H * 0.86;
+      const sx = Math.max(extent.width, size) / 2, sz = Math.max(extent.depth, size * 0.92) / 2, tent = H * 0.82, lean = sx * 0.32;
+      // Tensile membrane: the sides curve inward (concave) from a wide elliptical base to an off-centre apex.
+      const at = (t, a) => { const shrink = (1 - t) ** 1.7; return [Math.cos(a) * sx * shrink + lean * t, tent * t, Math.sin(a) * sz * shrink]; };
+      const rings = 14, segs = 48, positions = [], index = [];
+      for (let k = 0; k <= rings; k += 1) for (let m = 0; m <= segs; m += 1) positions.push(...at((k / rings) * 0.985, (m / segs) * Math.PI * 2));
+      for (let k = 0; k < rings; k += 1) for (let m = 0; m < segs; m += 1) { const a = k * (segs + 1) + m, b = a + segs + 1; index.push(a, b, a + 1, b, b + 1, a + 1); }
+      const geo = own(new THREE.BufferGeometry(), ownedGeometries);
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3)); geo.setIndex(index); geo.computeVertexNormals();
+      const skin = new THREE.Mesh(geo, colors.tent); skin.castShadow = true; parent.add(skin);
+      const cables = [];
+      for (const dir of [-1, 1]) for (let c = 0; c < 18; c += 1) {
+        const a0 = (c / 18) * Math.PI * 2; let prev = at(0, a0);
+        for (let step = 1; step <= 16; step += 1) { const t = (step / 16) * 0.985, next = at(t, a0 + dir * t * 2.2); cables.push(...prev, ...next); prev = next; }
+      }
+      lineSet(parent, cables, cableMaterial);
       place(shared.cylinder, colors.stone, [0, 0.015, 0], [sx * 1.06, 0.03, sz * 1.06], parent);
-      const body = place(shared.cone, colors.tent, [0, tent / 2, 0], [sx, tent, sz], parent); body.rotation.z = 0.06;
-      for (const f of [0.18, 0.38, 0.58, 0.76]) ringAt(parent, 1, tent * f, colors.mast, 0.3, sx * (1 - f) * 1.01, sz * (1 - f) * 1.01);
-      rod(parent, [-tent * Math.sin(0.06) * 0.5, tent - 0.02, 0], [-0.06, H, 0], 0.012, colors.mast);
-      place(shared.sphere, colors.gold, [-0.06, H, 0], [0.02, 0.02, 0.02], parent);
+      const apex = at(0.985, 0);
+      rod(parent, apex, [lean * 1.35, H, 0], 0.01, colors.mast);
       return { top: H + 0.03 };
     },
+    // Ak Orda: white palace with wings and a front colonnade; columned drum under a light-blue dome with gold ribs and a gold spire.
     'ak-orda'(parent, size, H) {
-      const w = size, d = size * 0.72, block = H * 0.4;
-      place(shared.box, colors.stone, [0, 0.02, 0], [w, 0.04, d], parent);
-      place(shared.box, colors.white, [0, 0.04 + block / 2, 0], [w * 0.62, block, d * 0.6], parent);
-      for (const side of [-1, 1]) place(shared.box, colors.white, [side * w * 0.33, 0.04 + block * 0.36, 0], [w * 0.3, block * 0.72, d * 0.48], parent);
-      for (let i = 0; i < 8; i += 1) place(shared.octa, colors.white, [(-0.35 + i * 0.1) * w * 0.62, 0.04 + block * 0.4, d * 0.33], [0.012, block * 0.8, 0.012], parent);
-      place(shared.box, colors.white, [0, 0.04 + block * 0.83, d * 0.33], [w * 0.5, block * 0.07, 0.03], parent);
-      const drumY = 0.04 + block;
-      place(shared.cylinder, colors.white, [0, drumY + 0.05, 0], [0.11, 0.1, 0.11], parent);
-      ringAt(parent, 0.115, drumY + 0.1, colors.gold, 1);
-      place(shared.dome, colors.blue, [0, drumY + 0.1, 0], [0.13, 0.15, 0.13], parent);
-      const spireBase = drumY + 0.25;
-      place(shared.cone, colors.gold, [0, spireBase + (H - spireBase) / 2, 0], [0.018, H - spireBase, 0.018], parent);
-      place(shared.sphere, colors.gold, [0, spireBase + 0.02, 0], [0.03, 0.03, 0.03], parent);
+      const w = size, d = size * 0.62, block = H * 0.34;
+      place(shared.box, colors.stone, [0, 0.02, 0], [w * 1.05, 0.04, d * 1.25], parent);
+      place(shared.box, colors.white, [0, 0.04 + block / 2, 0], [w * 0.56, block, d * 0.7], parent);
+      for (const side of [-1, 1]) place(shared.box, colors.white, [side * w * 0.38, 0.04 + block * 0.39, 0], [w * 0.24, block * 0.78, d * 0.62], parent);
+      for (let i = 0; i < 10; i += 1) place(shared.octa, colors.white, [(-0.25 + i * 0.0556) * w, 0.04 + block * 0.42, d * 0.39], [0.011, block * 0.84, 0.011], parent);
+      place(shared.box, colors.white, [0, 0.04 + block * 0.87, d * 0.39], [w * 0.56, block * 0.08, 0.035], parent);
+      place(shared.box, colors.stone, [0, 0.04 + block + 0.008, 0], [w * 0.58, 0.016, d * 0.72], parent);
+      const drumY = 0.04 + block + 0.016;
+      place(shared.cylinder, colors.white, [0, drumY + 0.045, 0], [0.12, 0.09, 0.12], parent);
+      for (let i = 0; i < 12; i += 1) { const a = (i / 12) * Math.PI * 2; place(shared.octa, colors.white, [Math.cos(a) * 0.128, drumY + 0.045, Math.sin(a) * 0.128], [0.006, 0.085, 0.006], parent); }
+      const domeY = drumY + 0.09;
+      place(shared.dome, colors.skyDome, [0, domeY, 0], [0.13, 0.15, 0.13], parent);
+      for (let k = 0; k < 4; k += 1) { const rib = place(shared.rib, colors.gold, [0, domeY, 0], [0.132, 0.152, 0.132], parent); rib.rotation.y = (k / 4) * Math.PI; }
+      ringAt(parent, 0.131, domeY + 0.004, colors.gold, 1);
+      const spireBase = domeY + 0.15;
+      place(shared.sphere, colors.gold, [0, spireBase + 0.03, 0], [0.028, 0.028, 0.028], parent);
+      place(shared.cone, colors.gold, [0, spireBase + (H - spireBase) / 2 + 0.02, 0], [0.014, H - spireBase - 0.04, 0.014], parent);
       return { top: H + 0.03 };
     },
+    // Palace of Peace and Reconciliation: granite pyramid on a grassy mound, horizontal bands, and a stained-glass apex.
     'peace-palace'(parent, size, H) {
-      place(shared.box, colors.stone, [0, 0.015, 0], [size, 0.03, size], parent);
-      const body = place(shared.pyramid, colors.stone, [0, 0.03 + H * 0.4, 0], [size * 0.7, H * 0.8, size * 0.7], parent); body.rotation.y = Math.PI / 4;
-      const apex = place(shared.pyramid, colors.glass, [0, 0.03 + H * 0.82, 0], [size * 0.2, H * 0.24, size * 0.2], parent); apex.rotation.y = Math.PI / 4;
-      for (const f of [0.25, 0.5]) { const band = place(shared.pyramid, colors.glass, [0, 0.03 + H * f, 0], [size * 0.7 * (1 - f) + 0.004, 0.012, size * 0.7 * (1 - f) + 0.004], parent); band.rotation.y = Math.PI / 4; }
+      const mound = place(shared.mound, colors.grass, [0, 0.035, 0], [size * 0.75, 0.07, size * 0.75], parent); mound.rotation.y = Math.PI / 4;
+      const y0 = 0.07, h = H - 0.07, half = size * 0.35;
+      const body = place(shared.pyramid, colors.stone, [0, y0 + h / 2, 0], [half * Math.SQRT2, h, half * Math.SQRT2], parent); body.rotation.y = Math.PI / 4;
+      const apexStart = 0.74;
+      const apex = place(shared.pyramid, colors.apexGold, [0, y0 + h * (apexStart + (1 - apexStart) / 2), 0], [half * Math.SQRT2 * (1 - apexStart) * 1.02, h * (1 - apexStart), half * Math.SQRT2 * (1 - apexStart) * 1.02], parent); apex.rotation.y = Math.PI / 4;
+      const bands = [];
+      for (const f of [0.2, 0.4, 0.58, apexStart]) {
+        const e = half * (1 - f) * 1.01, y = y0 + h * f, corners = [[-e, -e], [e, -e], [e, e], [-e, e]];
+        corners.forEach((corner, k) => { const next = corners[(k + 1) % 4]; bands.push(corner[0], y, corner[1], next[0], y, next[1]); });
+      }
+      for (let k = -2; k <= 2; k += 1) for (const [ax, az] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
+        const u = (k / 3) * half, bx = ax ? ax * half : u, bz = az ? az * half : u;
+        bands.push(bx * 1.01, y0, bz * 1.01, bx * (1 - apexStart), y0 + h * apexStart, bz * (1 - apexStart));
+      }
+      lineSet(parent, bands, seamMaterial);
       return { top: H + 0.03 };
     },
+    // Hazret Sultan: white mosque, drum with a turquoise main dome and gold crescent, corner domes, four slender minarets with balconies.
     'hazret-sultan'(parent, size, H) {
-      const w = size * 0.62, block = H * 0.3;
+      const w = size * 0.62, block = H * 0.28;
       place(shared.box, colors.stone, [0, 0.015, 0], [size, 0.03, size], parent);
       place(shared.box, colors.white, [0, 0.03 + block / 2, 0], [w, block, w], parent);
-      place(shared.octa, colors.white, [0, 0.03 + block + 0.05, 0], [w * 0.36, 0.1, w * 0.36], parent);
-      place(shared.dome, colors.turquoise, [0, 0.03 + block + 0.1, 0], [w * 0.36, w * 0.42, w * 0.36], parent);
-      place(shared.cone, colors.gold, [0, 0.03 + block + 0.1 + w * 0.42 + 0.05, 0], [0.015, 0.1, 0.015], parent);
+      place(shared.octa, colors.white, [0, 0.03 + block + 0.04, 0], [w * 0.34, 0.08, w * 0.34], parent);
+      ringAt(parent, w * 0.345, 0.03 + block + 0.078, colors.gold, 0.8);
+      const domeY = 0.03 + block + 0.08;
+      place(shared.dome, colors.turquoise, [0, domeY, 0], [w * 0.34, w * 0.4, w * 0.34], parent);
+      place(shared.cone, colors.gold, [0, domeY + w * 0.4 + 0.035, 0], [0.012, 0.07, 0.012], parent);
+      const crescent = place(shared.rib, colors.gold, [0, domeY + w * 0.4 + 0.085, 0], [0.018, 0.018, 0.04], parent); crescent.rotation.z = Math.PI / 2;
+      for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) place(shared.dome, colors.turquoise, [x * w * 0.36, 0.03 + block, z * w * 0.36], [0.055, 0.065, 0.055], parent);
+      for (const [x, z] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) place(shared.dome, colors.turquoise, [x * w * 0.5, 0.03 + block * 0.7, z * w * 0.5], [0.045, 0.05, 0.045], parent);
       for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-        minaret(parent, x * size * 0.42, z * size * 0.42, H);
-        place(shared.dome, colors.turquoise, [x * w * 0.32, 0.03 + block, z * w * 0.32], [0.05, 0.06, 0.05], parent);
+        const mx = x * size * 0.43, mz = z * size * 0.43;
+        place(shared.octa, colors.white, [mx, 0.03 + (H * 0.86) / 2, mz], [0.02, H * 0.86, 0.02], parent);
+        for (const f of [0.55, 0.75]) { const ring = place(shared.torus, colors.white, [mx, H * f, mz], [0.03, 0.03, 0.05], parent); ring.rotation.x = Math.PI / 2; }
+        place(shared.cone, colors.turquoise, [mx, H * 0.93, mz], [0.024, H * 0.12, 0.024], parent);
+        place(shared.sphere, colors.gold, [mx, H - 0.005, mz], [0.01, 0.01, 0.01], parent);
       }
       return { top: H + 0.03 };
     },
-    'grand-mosque'(parent, size, H) {
+        'grand-mosque'(parent, size, H) {
       const w = size * 0.6, block = H * 0.24;
       place(shared.box, colors.stone, [0, 0.015, 0], [size, 0.03, size * 0.9], parent);
       place(shared.box, colors.white, [0, 0.03 + block / 2, 0], [w, block, w], parent);
@@ -205,32 +268,45 @@ export function createCityDetails({ THREE, geography, project, groundY = 0.16 })
       for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) minaret(parent, x * size * 0.44, z * size * 0.4, H);
       return { top: H + 0.03 };
     },
+    // Nur Alem: a glass sphere of triangular panels on a low round base.
     'nur-alem'(parent, size, H) {
-      const r = Math.min(size * 0.45, H * 0.4);
-      place(shared.cylinder, colors.stone, [0, 0.03, 0], [size * 0.55, 0.06, size * 0.55], parent);
-      place(shared.cylinder, colors.darkGlass, [0, 0.06 + 0.06, 0], [r * 0.45, 0.12, r * 0.45], parent);
-      place(shared.sphere, colors.glass, [0, H - r, 0], [r, r, r], parent);
-      for (const f of [-0.5, 0, 0.5]) ringAt(parent, r * Math.sqrt(1 - f * f) * 1.01, H - r + f * r, colors.white, 0.6);
-      const meridian = place(shared.torus, colors.white, [0, H - r, 0], [r * 1.01, r * 1.01, r * 0.6], parent); meridian.rotation.y = Math.PI / 4;
+      const r = H * 0.4, baseTop = H - 2 * r + 0.02;
+      place(shared.cylinder, colors.stone, [0, 0.025, 0], [Math.max(size * 0.55, r * 1.2), 0.05, Math.max(size * 0.55, r * 1.2)], parent);
+      place(shared.cylinder, colors.darkGlass, [0, 0.05 + (baseTop - 0.05) / 2, 0], [r * 0.55, baseTop - 0.05, r * 0.55], parent);
+      const cy = H - r;
+      place(shared.sphere, colors.glass, [0, cy, 0], [r, r, r], parent);
+      const grid = new THREE.LineSegments(own(new THREE.EdgesGeometry(own(new THREE.IcosahedronGeometry(1, 3), ownedGeometries), 1), ownedGeometries), gridMaterial);
+      grid.position.set(0, cy, 0); grid.scale.set(r * 1.005, r * 1.005, r * 1.005); parent.add(grid);
       return { top: H + 0.03 };
     },
+    // Kazakh Eli: slender tapering white stele on a stepped round base with a bronze relief ring, topped by a gold Samruk bird.
     'kazakh-eli'(parent, size, H) {
-      place(shared.box, colors.stone, [0, 0.02, 0], [size, 0.04, size], parent);
-      place(shared.box, colors.white, [0, 0.07, 0], [size * 0.6, 0.06, size * 0.6], parent);
-      place(shared.octa, colors.white, [0, 0.1 + H * 0.38, 0], [0.04, H * 0.76, 0.04], parent);
-      const birdY = 0.1 + H * 0.78;
-      place(shared.sphere, colors.gold, [0, birdY, 0], [0.05, 0.035, 0.035], parent);
-      for (const side of [-1, 1]) { const wing = place(shared.box, colors.gold, [side * 0.08, birdY + 0.04, 0], [0.13, 0.012, 0.05], parent); wing.rotation.z = side * 0.5; }
+      place(shared.cylinder, colors.stone, [0, 0.02, 0], [size * 0.5, 0.04, size * 0.5], parent);
+      place(shared.cylinder, colors.white, [0, 0.065, 0], [size * 0.3, 0.05, size * 0.3], parent);
+      ringAt(parent, size * 0.3, 0.065, colors.bronze, 2.2);
+      const shaft = H * 0.8;
+      const stele = place(shared.stele, colors.white, [0, 0.09 + shaft / 2, 0], [0.04, shaft, 0.04], parent); stele.rotation.y = Math.PI / 4;
+      const birdY = 0.09 + shaft + 0.03;
+      place(shared.sphere, colors.gold, [0, birdY, 0], [0.026, 0.02, 0.05], parent);
+      for (const side of [-1, 1]) {
+        const wing = place(shared.pyramid, colors.gold, [side * 0.055, birdY + 0.045, 0], [0.028, 0.12, 0.012], parent);
+        wing.rotation.z = -side * 0.75;
+      }
       return { top: H + 0.03 };
     },
+    // Astana Opera: neoclassical white hall, front portico of columns under a triangular pediment with a gold quadriga.
     'astana-opera'(parent, size, H) {
-      const w = size * 0.8, d = size * 0.6, block = H * 0.55;
-      place(shared.box, colors.stone, [0, 0.02, 0], [size, 0.04, size * 0.8], parent);
-      place(shared.box, colors.white, [0, 0.04 + block / 2, -d * 0.08], [w, block, d * 0.8], parent);
-      for (let i = 0; i < 8; i += 1) place(shared.octa, colors.white, [(-0.42 + i * 0.12) * w, 0.04 + block * 0.4, d * 0.36], [0.014, block * 0.8, 0.014], parent);
-      const roof = place(shared.pyramid, colors.stone, [0, 0.04 + block * 0.9, d * 0.36], [w * 0.52, block * 0.25, 0.05], parent); roof.rotation.y = Math.PI / 4;
-      place(shared.dome, colors.darkGlass, [0, 0.04 + block, -d * 0.08], [w * 0.2, H - block - 0.1, w * 0.2], parent);
-      place(shared.sphere, colors.gold, [0, H - 0.04, -d * 0.08], [0.025, 0.025, 0.025], parent);
+      const w = size * 0.78, d = size * 0.62, body = H * 0.62;
+      place(shared.box, colors.stone, [0, 0.02, 0], [size, 0.04, size * 0.85], parent);
+      place(shared.box, colors.white, [0, 0.04 + body / 2, -d * 0.1], [w, body, d * 0.8], parent);
+      place(shared.box, colors.white, [0, 0.04 + H * 0.4, -d * 0.2], [w * 0.62, H * 0.8, d * 0.45], parent);
+      for (let i = 0; i < 8; i += 1) place(shared.octa, colors.white, [(-0.35 + i * 0.1) * w, 0.04 + body * 0.42, d * 0.36], [0.012, body * 0.84, 0.012], parent);
+      place(shared.box, colors.white, [0, 0.04 + body * 0.88, d * 0.36], [w * 0.76, body * 0.08, 0.04], parent);
+      const pedW = w * 0.8, pedH = body * 0.28, pedBase = 0.04 + body * 0.92;
+      const pediment = place(shared.prism, colors.white, [0, pedBase + pedH / 3, d * 0.36], [pedW / 1.732, 0.05, pedH / 1.5], parent);
+      pediment.rotation.x = -Math.PI / 2;
+      place(shared.box, colors.gold, [0, pedBase + pedH + 0.02, d * 0.36], [0.09, 0.04, 0.035], parent);
+      for (const side of [-1, 1]) place(shared.sphere, colors.gold, [side * 0.05, pedBase + pedH + 0.01, d * 0.36], [0.018, 0.018, 0.018], parent);
       return { top: H + 0.03 };
     },
     'concert-hall'(parent, size, H) {
@@ -298,10 +374,11 @@ export function createCityDetails({ THREE, geography, project, groundY = 0.16 })
     landmark.userData = { id: props.id ?? model, name: props.name ?? model, scored: false };
     const { top } = builder(landmark, size, spec.height, extent);
     landmark.position.set(east, groundY, -north);
+    landmark.scale.setScalar(scaleModels);
     group.add(landmark);
-    const renderRadius = model === 'khan-shatyr' ? Math.hypot(Math.max(extent.width, size), Math.max(extent.depth, size * 0.92)) / 2 * 1.05 : Math.hypot(size, size) / 2;
+    const renderRadius = scaleModels * (model === 'khan-shatyr' ? Math.hypot(Math.max(extent.width, size), Math.max(extent.depth, size * 0.92)) / 2 * 1.05 : Math.hypot(size, size) / 2);
     zones.push({ kind: 'landmark', id: landmark.userData.id, polygons: footprint, center: [east, north], radius: renderRadius, ...bounds(footprint.length ? footprint : [[[[east, north]]]], renderRadius) });
-    landmarkAnchors.push({ id: landmark.userData.id, name: landmark.userData.name, position: [east, groundY + top, -north] });
+    landmarkAnchors.push({ id: landmark.userData.id, name: landmark.userData.name, position: [east, groundY + top * scaleModels, -north] });
   }
 
   const parks = [];
