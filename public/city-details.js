@@ -6,10 +6,10 @@
  * enlarged rendered footprint as well as the mapped one.
  */
 const TREE_CAP = 90;
-const TREE_LANDMARK_CLEARANCE = 0.18; // km beyond a model's footprint, so crowns never overlap monuments
-const TREE_WATER_CLEARANCE = 0.02; // km from mapped water edges, so trunks stay on land
+const TREE_LANDMARK_CLEARANCE = 0.18; // scene units beyond a model footprint; independent of the map projection scale
+const TREE_WATER_CLEARANCE = 0.02; // scene units from mapped water edges, so trunks stay on land
 const LANDMARK_SIZE = {
-  // Minimum rendered footprint (km) and height (scene units). Heights follow approximate real heights at about
+  // Minimum rendered footprint and height (scene units). Heights follow approximate real heights at about
   // 1 unit per 100 m, so landmarks keep their true proportions to each other (Abu Dhabi Plaza, ~320 m, is compressed).
   // Footprints are enlarged for readability; heights are not exaggerated.
   'bayterek': { minSize: 0.26, height: 1.0 },       // ~97 m
@@ -103,20 +103,20 @@ export function createCityDetails({ THREE, geography, project, groundY = 0.16, m
     mound: own(new THREE.CylinderGeometry(0.62, 0.72, 1, 4), ownedGeometries),
   };
   const colors = {
-    white: material(0xf7f4ec), stone: material(0xe6dccb), gold: material(0xd8a73c, { metalness: 0.45, roughness: 0.35 }),
-    blue: material(0x3f7fb5, { metalness: 0.2, roughness: 0.4 }), glass: material(0xb8d6d7, { metalness: 0.25, roughness: 0.25 }),
-    tent: material(0xf1ead8, { transparent: true, opacity: 0.9, side: THREE.DoubleSide }), mast: material(0xd6d0c4),
-    water: material(0x82cddd, { roughness: 0.3 }), grass: material(0x9cc58a, { roughness: 1 }), bronze: material(0x9c7a4b, { metalness: 0.4, roughness: 0.5 }),
-    skyDome: material(0x62a8d8, { metalness: 0.2, roughness: 0.35 }), apexGold: material(0xf2c14e, { metalness: 0.3, roughness: 0.3, transparent: true, opacity: 0.95 }),
-    park: material(0xcfe2c1, { roughness: 1, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }),
-    trunk: material(0xb29c7e), crown: material(0x4b9562),
-    turquoise: material(0x2f9fb3, { metalness: 0.25, roughness: 0.35 }), darkGlass: material(0x5d7f8f, { metalness: 0.35, roughness: 0.25 }),
-    field: material(0x8fc27a, { roughness: 1 }), deck: material(0xd9dfe0), stripe: material(0x1f6fb2), train: material(0xfbfbf7),
+    white: material(0xf2f0e9), stone: material(0xc9bca9), gold: material(0xc4932d, { metalness: 0.45, roughness: 0.35 }),
+    blue: material(0x245b91, { metalness: 0.2, roughness: 0.4 }), glass: material(0x28647d, { metalness: 0.25, roughness: 0.25 }),
+    tent: material(0xeee7db, { transparent: true, opacity: 0.9, side: THREE.DoubleSide }), mast: material(0x7c858b),
+    water: material(0x3894b8, { roughness: 0.3 }), grass: material(0x61954e, { roughness: 1 }), bronze: material(0x9c7a4b, { metalness: 0.4, roughness: 0.5 }),
+    skyDome: material(0x347fa9, { metalness: 0.2, roughness: 0.35 }), apexGold: material(0xd8a32c, { metalness: 0.3, roughness: 0.3, transparent: true, opacity: 0.95 }),
+    park: material(0x91b873, { roughness: 1, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }),
+    trunk: material(0x826046), crown: material(0x246849),
+    turquoise: material(0x237f95, { metalness: 0.25, roughness: 0.35 }), darkGlass: material(0x3b6276, { metalness: 0.14, roughness: 0.34 }),
+    field: material(0x4d965c, { roughness: 1 }), deck: material(0x9ba8ae), stripe: material(0x146fa9), train: material(0xfbfbf7),
   };
-  const outlineMaterial = own(new THREE.LineBasicMaterial({ color: 0x4b9562, transparent: true, opacity: 0.85 }), ownedMaterials);
-  const cableMaterial = own(new THREE.LineBasicMaterial({ color: 0xb9b09c }), ownedMaterials);
+  const outlineMaterial = own(new THREE.LineBasicMaterial({ color: 0x246849, transparent: true, opacity: 0.85 }), ownedMaterials);
+  const cableMaterial = own(new THREE.LineBasicMaterial({ color: 0x877c6a }), ownedMaterials);
   const gridMaterial = own(new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 }), ownedMaterials);
-  const seamMaterial = own(new THREE.LineBasicMaterial({ color: 0xcfc6b4 }), ownedMaterials);
+  const seamMaterial = own(new THREE.LineBasicMaterial({ color: 0x908877 }), ownedMaterials);
 
   const place = (geometry, mat, [x, y, z], [sx, sy, sz], parent) => {
     const mesh = new THREE.Mesh(geometry, mat);
@@ -132,7 +132,7 @@ export function createCityDetails({ THREE, geography, project, groundY = 0.16, m
     mesh.castShadow = true; parent.add(mesh); return mesh;
   };
 
-  // Landmark models, built around the local origin and placed at the mapped point. size = footprint (km), H = height.
+  // Landmark models, built around the local origin and placed at the mapped point. size = footprint in scene units, H = height.
   const ringAt = (parent, radius, y, mat, tube = 1, sx = 1, sz = 1) => {
     const ring = place(shared.torus, mat, [0, y, 0], [radius * sx, radius * sz, radius * tube], parent);
     ring.rotation.x = Math.PI / 2; return ring;
@@ -370,7 +370,10 @@ export function createCityDetails({ THREE, geography, project, groundY = 0.16, m
     landmark.position.set(east, groundY, -north);
     landmark.scale.setScalar(scaleModels);
     group.add(landmark);
-    const renderRadius = scaleModels * (model === 'khan-shatyr' ? Math.hypot(Math.max(extent.width, size), Math.max(extent.depth, size * 0.92)) / 2 * 1.05 : Math.hypot(size, size) / 2);
+    // Include every visible protrusion (sphere, tent mast, minaret balcony), not only the mapped base.
+    landmark.updateMatrixWorld(true);
+    const renderedBounds = new THREE.Box3().setFromObject(landmark);
+    const renderRadius = Math.hypot(Math.max(east - renderedBounds.min.x, renderedBounds.max.x - east), Math.max(-north - renderedBounds.min.z, renderedBounds.max.z + north)) + 0.01;
     zones.push({ kind: 'landmark', id: landmark.userData.id, polygons: footprint, center: [east, north], radius: renderRadius, ...bounds(footprint.length ? footprint : [[[[east, north]]]], renderRadius) });
     landmarkAnchors.push({ id: landmark.userData.id, name: landmark.userData.name, position: [east, groundY + top * scaleModels, -north] });
   }
@@ -489,7 +492,8 @@ export function createCityDetails({ THREE, geography, project, groundY = 0.16, m
       for (const [px, pz] of [[-0.1, -0.055], [0.1, -0.055], [-0.1, 0.055], [0.1, 0.055]]) place(shared.octa, colors.white, [px, deckY + 0.065, pz], [0.006, 0.09, 0.006], station);
       station.position.set(x, 0, -y); station.rotation.y = Math.atan2(nearest.b[1] - nearest.a[1], nearest.b[0] - nearest.a[0]);
       group.add(station);
-      zones.push({ kind: 'station', polygons: [], center: [x, y], radius: 0.12, minX: x - 0.12, maxX: x + 0.12, minY: y - 0.12, maxY: y + 0.12 });
+      const stationRadius = Math.hypot(0.22 / 2, 0.14 / 2) + 0.01; // canopy corners, at any route angle
+      zones.push({ kind: 'station', polygons: [], center: [x, y], radius: stationRadius, minX: x - stationRadius, maxX: x + stationRadius, minY: y - stationRadius, maxY: y + stationRadius });
       stationAnchors.push({ id: feature.properties?.id ?? `station-${stationAnchors.length}`, name: feature.properties?.name ?? 'LRT station', position: [x, deckY + 0.18, -y] });
     }
     const line = lrtLines.reduce((best, item) => (lineLength(item) > lineLength(best) ? item : best));

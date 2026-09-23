@@ -1,5 +1,5 @@
 /** Geographic presentation only. All policy effects and scores come from the shared evaluator. */
-import { createCityDetails } from './city-details.js';
+import { createCityDetails } from './city-details.js?v=20260923-r09';
 import { makeTrack, sampleTrack } from './city-motion.js';
 import { BASELINE } from '../shared/simulation.js';
 // One shared horizontal scale keeps every geographic layer aligned. Model sizes
