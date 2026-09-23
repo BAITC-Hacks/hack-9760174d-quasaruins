@@ -384,6 +384,7 @@ export function createCityDetails({ THREE, geography, project, groundY = 0.16, m
     landmark.userData = { id: props.id ?? model, name: props.name ?? model, scored: false };
     const { top } = builder(landmark, size, spec.height, extent);
     landmark.position.set(east, groundY, -north);
+    if (model === 'khan-shatyr') landmark.rotation.y = Math.PI; // leaning apex faces the real orientation
     landmark.scale.setScalar(scaleModels);
     group.add(landmark);
     // Include every visible protrusion (sphere, tent mast, minaret balcony), not only the mapped base.
