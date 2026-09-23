@@ -6,9 +6,11 @@ const displayDelta = (after, before) => after - before;
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const key = (plan) => plan.map((item) => `${item.measureId}:${item.districtId ?? '*'}`).sort().join('|');
 const storageKey = 'akim-lab.plan.v1';
-const state = { selections: [], history: [], locks: new Set(), applied: null, pinned: null, districtId: 'nura', category: 'all', view: 'after', paused: matchMedia('(prefers-reduced-motion: reduce)').matches, revision: 0, busy: null, request: null, suggestion: null };
+const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
+const state = { selections: [], history: [], locks: new Set(), applied: null, pinned: null, districtId: 'nura', category: 'all', view: 'after', paused: motionPreference.matches, reducedMotion: motionPreference.matches, revision: 0, busy: null, request: null, suggestion: null };
 let DATASET, EXAMPLE_PLAN, BASELINE, validatePlan, simulatePlan, city;
 let measures = new Map(), districts = new Map(), categories = new Map();
+motionPreference.addEventListener('change', event => { state.reducedMotion = event.matches; if(event.matches) state.paused = true; render(); });
 
 function node(tag, className, content, attrs = {}) {
   const item = document.createElement(tag);
@@ -183,6 +185,31 @@ function renderResults(validation) {
     heading.append(label, number); const track = node('div', 'indicator-track', null, { 'aria-hidden': 'true' }); const fill = node('span'); fill.style.width = `${Math.max(0, Math.min(100, value))}%`; track.append(fill); row.append(heading, track); return row;
   }));
 }
+function renderProjectChanges(mode) {
+  const current = mode === 'before' ? [] : displayedPlan();
+  const selectionKey = (selection) => `${selection.measureId}:${selection.districtId ?? '*'}`;
+  const aKeys = new Set((state.pinned?.selections??[]).map(selectionKey)), bKeys = new Set(state.selections.map(selectionKey));
+  const added = state.pinned ? state.selections.filter(selection=>!aKeys.has(selectionKey(selection))) : [];
+  const removed = state.pinned ? state.pinned.selections.filter(selection=>!bKeys.has(selectionKey(selection))) : [];
+  const host = $('project-change-summary');
+  if (mode === 'before' || !current.length) { host.replaceChildren(); return []; }
+  const compared = Boolean(state.pinned), heading = node('div', 'project-change-heading');
+  heading.append(node('span', 'eyebrow', compared ? 'CHANGES FROM PLAN A' : 'EXPLORE YOUR PROJECTS'), node('span', '', compared ? `${added.length} added · ${removed.length} removed` : 'Select a project to inspect'));
+  const list = node('div', 'project-focus-list');
+  const entries = compared && (added.length||removed.length) ? [...added.map(selection=>({selection,view:'after',prefix:'+'})),...removed.map(selection=>({selection,view:'a',prefix:'−'}))] : current.map(selection=>({selection,view:mode==='a'?'a':'after',prefix:''}));
+  for (const {selection,view,prefix} of entries) {
+    const measure = measures.get(selection.measureId);
+    const chip = button('', `project-focus-chip${view === 'a' && prefix ? ' previous' : ''}`, () => { if(state.view!==view){state.view=view;render();}city?.focusProject(selection.measureId, selection.districtId); }, { 'aria-label': `Focus ${measure.name} ${selection.districtId ? `in ${districtName(selection.districtId)}` : 'city-wide'}${prefix ? view==='a'?' in Plan A':' in your current plan':''}`, 'data-focus': `focus-${measure.id}-${view}` });
+    const dot = node('span', 'category-dot'); dot.style.setProperty('--category', categories.get(measure.category)?.color ?? '#327857');
+    chip.append(dot,node('span','',`${prefix?prefix+' ':''}${measure.name}`),node('small','',districtName(selection.districtId)));
+    const contribution = (view === 'a' ? state.pinned?.result : state.applied?.result)?.contributions?.find((item) => item.measureId === measure.id);
+    if(contribution) chip.title = Object.entries(contribution.effects).map(([id,value])=>`${DATASET.indicators.find(indicator=>indicator.id===id)?.name??id}: ${signed(value)}`).join('; ')+' — realized project effects before synergy';
+    list.append(chip);
+  }
+  if(compared&&!added.length&&!removed.length) list.append(node('p','help','These project choices match Plan A.'));
+  host.replaceChildren(heading,list);
+  return compared ? (mode==='a'?removed:added).map(selectionKey) : [];
+}
 function render() {
   if (!DATASET) return;
   const activeFocus = document.activeElement?.getAttribute('data-focus');
@@ -203,13 +230,16 @@ function render() {
   $('export-plan').disabled = !activePlan; $('print-plan').disabled = !activePlan;
   $('adviser-output').hidden = state.view !== 'after'; $('suggestion-output').hidden = state.view !== 'after';
   $('pause-city').setAttribute('aria-pressed', state.paused); $('pause-city').textContent = state.paused ? 'Resume motion' : 'Pause motion';
+  $('pause-city').disabled = state.reducedMotion;
+  if(state.reducedMotion) $('pause-city').textContent = 'Reduced motion';
   document.querySelectorAll('[data-view]').forEach((item) => item.setAttribute('aria-pressed', item.dataset.view === state.view));
   $('district-shortcuts').replaceChildren(...DATASET.districts.map((district) => button(district.name, '', () => chooseDistrict(district.id), { 'aria-pressed': district.id === state.districtId, 'data-focus': `district-${district.id}` })));
   renderSlots(); renderProjects(); renderResults(validation);
   const mode = state.view === 'before' ? 'before' : state.view === 'a' ? 'a' : state.applied ? 'after' : 'draft';
+  const highlightKeys = renderProjectChanges(mode);
   $('scene-state').textContent = { before: 'BASELINE CITY', a: 'PINNED PLAN A', after: 'YOUR FUTURE CITY', draft: state.selections.length ? 'DRAFT · PROJECT PREVIEW' : 'BASELINE CITY' }[mode];
-  $('scene-description').textContent = mode === 'a' ? 'Pinned Plan A. The same camera keeps changes easy to compare.' : mode === 'before' ? 'The city before intervention. Your choices are preserved.' : mode === 'after' ? 'Your validated end-state at 8 quarters. Representative upgrades illustrate the selected projects.' : 'Translucent projects are previews. Complete five choices and simulate to calculate official outcomes.';
-  city?.update({ selections: displayedPlan(), result: mode === 'draft' ? null : effectiveResult(), districtId: state.districtId, mode, paused: state.paused });
+  $('scene-description').textContent = mode === 'a' ? 'Pinned Plan A. Amber rings mark projects that differ from your current choices.' : mode === 'before' ? 'The city before intervention. Your choices are preserved.' : mode === 'after' ? 'Your validated end-state at 8 quarters. Buildings, road activity and reactions are illustrative; green rings mark changed projects.' : 'Translucent projects are previews. Complete five choices and simulate to calculate official outcomes.';
+  city?.update({ selections: displayedPlan(), result: mode === 'draft' ? null : effectiveResult(), districtId: state.districtId, mode, paused: state.paused, reducedMotion: state.reducedMotion, highlightKeys, indicatorNames: Object.fromEntries(DATASET.indicators.map(indicator=>[indicator.id,indicator.name])), measureNames: Object.fromEntries(DATASET.measures.map(measure=>[measure.id,measure.name])) });
   if (activeFocus) [...document.querySelectorAll('[data-focus]')].find((item) => item.dataset.focus === activeFocus)?.focus({ preventScroll: true });
 }
 function applyPlan() {
@@ -291,7 +321,7 @@ function bindControls() {
 async function boot() {
   // The planner must still boot if the separate 3D module cannot load.
   const sceneReady = import('./city.js').then(({ createCity }) => {
-    city = createCity({ canvasHost: $('city-canvas'), labelsHost: $('city-labels'), fallbackHost: $('city-fallback'), loadingHost: $('scene-loading'), onDistrictSelect: (id) => chooseDistrict(id), onCredit: (text) => { $('geography-credit').textContent = text; } });
+    city = createCity({ canvasHost: $('city-canvas'), labelsHost: $('city-labels'), reactionsHost: $('city-reactions'), fallbackHost: $('city-fallback'), loadingHost: $('scene-loading'), onDistrictSelect: (id) => chooseDistrict(id), onCredit: (text) => { $('geography-credit').textContent = text; } });
     return city.ready.then(() => render());
   }).catch((error) => {
     $('scene-loading').hidden = true; $('city-fallback').hidden = false;
