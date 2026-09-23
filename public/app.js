@@ -10,6 +10,8 @@ const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
 const state = { selections: [], history: [], locks: new Set(), applied: null, pinned: null, districtId: 'nura', category: 'all', view: 'after', paused: motionPreference.matches, reducedMotion: motionPreference.matches, revision: 0, busy: null, request: null, suggestion: null, pending: null, peek: null, run: null, timeline: null, speed: 1, speech: null, speechRequest: null, speechUrl: null };
 let DATASET, EXAMPLE_PLAN, BASELINE, validatePlan, simulatePlan, timelinePlan, city;
 let measures = new Map(), districts = new Map(), categories = new Map();
+const effectIcons = { T1:'🚗', T2:'🚌', E1:'🌳', E2:'🍃', S1:'🎒', S2:'✚', B1:'💡', B2:'🚸', C1:'🔧', C2:'💬' };
+let activeDrag = null, suppressCardClickUntil = 0;
 motionPreference.addEventListener('change', event => { state.reducedMotion = event.matches; if(event.matches) { state.paused = true; if(state.run) finishRun(); } render(); });
 
 function node(tag, className, content, attrs = {}) {
@@ -51,6 +53,7 @@ function saveLocal() {
   try { localStorage.setItem(storageKey, JSON.stringify({ datasetVersion: DATASET.version, selections: state.selections, pinned: state.pinned?.selections ?? null, locks: [...state.locks] })); } catch { /* Storage may be disabled; the active plan still works. */ }
 }
 function editPlan(next, { remember = true } = {}) {
+  if (activeDrag) finishCardDrag(null, true);
   if (remember) state.history.push({ selections: clone(state.selections), locks: [...state.locks] });
   if (state.history.length > 30) state.history.shift();
   state.run = null; state.timeline = null; state.pending = null; state.peek = null; $('project-peek').hidden = true;
@@ -115,6 +118,7 @@ const projectPaths = {
  M14:'M3 15h24v16H3z M27 20h8l5 7v4H27 M8 31v4 M33 31v4 M9 22h10 M14 17v10 M32 22v5h7'
 };
 const projectArtwork = new Map();
+const badgeArtwork = new Map();
 function projectArt(id) {
  if(projectArtwork.has(id))return projectArtwork.get(id);
  const host=node('span','project-art',null,{'aria-hidden':'true'}), svg=document.createElementNS('http://www.w3.org/2000/svg','svg'), path=document.createElementNS(svg.namespaceURI,'path');
@@ -127,10 +131,133 @@ function projectArt(id) {
 function highlightCard(id) {
  const measure=measures.get(id);
  if(!measure||state.run||document.querySelector('dialog[open]')){city?.highlightProject?.(null);return;}
- const selected=state.selections.find(item=>item.measureId===id);
+ const selected=(state.view==='a'?state.pinned?.selections??[]:state.selections).find(item=>item.measureId===id);
  city?.highlightProject?.(id,measure.scope==='city'?null:selected?.districtId??state.districtId);
 }
 function clearCardHighlight() { city?.highlightProject?.(null); }
+function positionPointerPanel(panel,x,y) {
+ const rect=panel.getBoundingClientRect(), gap=16, edge=10;
+ const left=x+gap+rect.width>innerWidth-edge?x-rect.width-gap:x+gap;
+ panel.style.left=`${Math.max(edge,Math.min(innerWidth-rect.width-edge,left))}px`;
+ panel.style.top=`${Math.max(edge,Math.min(innerHeight-rect.height-edge,y+gap))}px`;
+}
+function hideCardTooltip() { $('card-tooltip').hidden=true; }
+function bindProjectPointer(element,id) {
+ element.addEventListener('pointerenter',event=>{
+   if(event.pointerType==='touch'||activeDrag?.active||state.run)return;
+   const measure=measures.get(id),tip=$('card-tooltip');
+   tip.replaceChildren(node('strong','',measure.name),node('span','tooltip-cost',`${measure.cost} units · ${measure.scope==='city'?'City-wide':districtName(state.selections.find(item=>item.measureId===id)?.districtId??state.districtId)}`),node('p','',measure.description));
+   tip.hidden=false;positionPointerPanel(tip,event.clientX,event.clientY);requestAnimationFrame(()=>{if(!tip.hidden)positionPointerPanel(tip,event.clientX,event.clientY);});highlightCard(id);
+ });
+ element.addEventListener('pointermove',event=>{if(!$('card-tooltip').hidden)positionPointerPanel($('card-tooltip'),event.clientX,event.clientY);});
+ element.addEventListener('pointerleave',()=>{hideCardTooltip();if(!activeDrag?.active)clearCardHighlight();});
+ element.addEventListener('focus',()=>{highlightCard(id);if(element.matches(':focus-visible'))showProjectDetail(id);});
+ element.addEventListener('blur',()=>{hideCardTooltip();if(!activeDrag?.active)clearCardHighlight();});
+}
+function renderPlacedProjects() {
+ $('placed-projects').replaceChildren(...displayedPlan().map(selection=>{
+   const measure=measures.get(selection.measureId);
+   const badge=button('','placed-project',()=>{if(performance.now()>=suppressCardClickUntil)showProjectDetail(measure.id);},{'aria-label':`${measure.name} · ${districtName(selection.districtId)} · ${measure.cost} units`,'data-focus':`badge-${measure.id}`,'data-measure':measure.id,'data-district':selection.districtId??'city'});
+   if(!badgeArtwork.has(measure.id)){
+     const art=projectArt(measure.id).cloneNode(true),image=art.querySelector('img');
+     if(image?.complete&&image.naturalWidth)art.classList.add('art-loaded');
+     else image?.addEventListener('load',()=>art.classList.add('art-loaded'),{once:true});
+     badgeArtwork.set(measure.id,art);
+   }
+   const art=badgeArtwork.get(measure.id);
+   badge.append(art);badge.title=`${measure.name} · ${districtName(selection.districtId)}`;
+   badge.disabled=Boolean(state.run);bindProjectPointer(badge,measure.id);
+   if(state.view!=='a')bindCardDrag(badge,measure.id,true);
+   return badge;
+ }));
+ positionPlacedProjects();
+}
+function positionPlacedProjects() {
+ const anchors=city?.getPlacementAnchors?.(), canvas=$('city-canvas').getBoundingClientRect(), overlay=$('placed-projects').getBoundingClientRect();
+ const hud=document.querySelector('.hud').getBoundingClientRect(), lower=document.querySelector('.city-bottom-tools').getBoundingClientRect();
+ const notice=$('app-message').getBoundingClientRect();
+ const top=Math.max(hud.bottom+55,notice.height?notice.bottom+8:0),bottom=Math.max(top+50,lower.top-12),size=46,gap=7,used=[],groups=new Map();
+ for(const badge of $('placed-projects').children){const id=badge.dataset.district; if(!groups.has(id))groups.set(id,[]);groups.get(id).push(badge);}
+ for(const [id,badges]of groups){
+   const anchor=id==='city'?anchors?.city:anchors?.districts?.[id];
+   let centerX=anchor?anchor.x+canvas.left:innerWidth/2,centerY=anchor?anchor.y+canvas.top:top+55;
+   const groupTop=top+(id!=='city'&&groups.has('city')?size+gap:0);
+   centerX=Math.max(32,Math.min(innerWidth-32,centerX));centerY=id==='city'?top+size/2:Math.max(groupTop+size/2,Math.min(bottom-size/2,centerY));
+   badges.forEach((badge,index)=>{
+     let x=Math.max(10,Math.min(innerWidth-size-10,centerX+(index-(badges.length-1)/2)*(size+gap)-size/2));
+     let y=centerY-size/2;
+     const collides=(a,b)=>used.some(rect=>Math.abs(rect.x-a)<size+gap&&Math.abs(rect.y-b)<size+gap);
+     if(collides(x,y)){
+       outer:for(let row=0;row<8;row++)for(let col=-3;col<=3;col++){
+         const a=Math.max(10,Math.min(innerWidth-size-10,x+col*(size+gap))),b=groupTop+row*(size+gap);
+         if(b+size<=bottom&&!collides(a,b)){x=a;y=b;break outer;}
+       }
+     }
+     used.push({x,y});badge.style.left=`${x-overlay.left}px`;badge.style.top=`${y-overlay.top}px`;
+     badge.classList.toggle('edge-anchor',Boolean(anchor&&!anchor.visible));
+   });
+ }
+}
+// All plan edits use the shared official validator. Districts have no project cap.
+function projectDropCandidate(id,districtId,placed=false) {
+ const measure=measures.get(id);
+ if(!districtId)return {valid:false,reason:'Drop on a district in the city.'};
+ if(measure?.scope==='district'&&districtId==='sarayshyk')return {valid:false,reason:'Sarayshyk is outside this five-district scenario.'};
+ const selection={measureId:id,districtId:measure?.scope==='city'?null:districtId};
+ const selections=placed?state.selections.map(item=>item.measureId===id?selection:item):[...state.selections,selection];
+ const validation=validatePlan(selections,{allowPartial:true});
+ return {valid:validation.valid,reason:validation.errors.map(error=>error.message).join(' '),selections,selection};
+}
+function bindCardDrag(element,id,placed) {
+ element.addEventListener('pointerdown',event=>{
+   if(event.button!==0||!event.isPrimary||state.run||activeDrag||!city?.districtAtClientPoint||document.querySelector('dialog[open]'))return;
+   activeDrag={pointerId:event.pointerId,id,placed,source:element,startX:event.clientX,startY:event.clientY,x:event.clientX,y:event.clientY,rect:element.getBoundingClientRect(),active:false};
+   element.setPointerCapture(event.pointerId);
+ });
+ element.addEventListener('lostpointercapture',event=>{if(activeDrag?.pointerId===event.pointerId)finishCardDrag(event,true);});
+ element.addEventListener('dragstart',event=>event.preventDefault());
+}
+function currentDrop(drag,x,y) {
+ const hit=document.elementFromPoint(x,y);
+ if(hit?.closest('.project-deck'))return drag.placed?{valid:true,remove:true,reason:'Return to the hand to remove this project.'}:{valid:false,reason:'Drop on a district in the city.'};
+ if(hit?.closest('.hud,.map-toolbar,.city-bottom-tools,.project-peek,dialog,.map-credit'))return {valid:false,reason:'Drop on a district in the city.'};
+ return projectDropCandidate(drag.id,city.districtAtClientPoint(x,y),drag.placed);
+}
+function moveCardDrag(event) {
+ const drag=activeDrag;if(!drag||drag.pointerId!==event.pointerId)return;
+ drag.x=event.clientX;drag.y=event.clientY;
+ if(!drag.active){
+   const dx=event.clientX-drag.startX,dy=event.clientY-drag.startY;
+   if(Math.hypot(dx,dy)<8||(event.pointerType==='touch'&&Math.abs(dx)>Math.abs(dy)))return;
+   drag.active=true;city.setInteractionLocked?.(true);hideCardTooltip();state.pending=null;state.peek=null;$('project-peek').hidden=true;drag.source.classList.remove('pending');clearCardHighlight();
+   drag.source.classList.add('drag-origin');
+   drag.ghost=node('div','drag-card',null,{'aria-hidden':'true'});drag.ghost.append(projectArt(drag.id).cloneNode(true),node('span','',projectNames[drag.id]));document.body.append(drag.ghost);
+ }
+ event.preventDefault();drag.ghost.style.left=`${event.clientX-43}px`;drag.ghost.style.top=`${event.clientY-53}px`;
+ const drop=currentDrop(drag,event.clientX,event.clientY),status=$('drop-status');
+ const text=drop.reason||(drop.selection.districtId?districtName(drop.selection.districtId):'All five districts');
+ if(status.textContent!==text)status.textContent=text;
+ status.hidden=false;status.classList.toggle('invalid',!drop.valid);drag.ghost.classList.toggle('invalid',!drop.valid);positionPointerPanel(status,event.clientX,event.clientY);
+ $('project-library').classList.toggle('drop-removal',Boolean(drop.remove));
+ if(drop.valid&&!drop.remove)city.highlightProject?.(drag.id,drop.selection.districtId);else clearCardHighlight();
+}
+function finishCardDrag(event,cancelled=false) {
+ const drag=activeDrag;if(!drag||(event&&event.pointerId!==drag.pointerId))return;
+ activeDrag=null;city?.setInteractionLocked?.(false);hideCardTooltip();clearCardHighlight();$('drop-status').hidden=true;$('project-library').classList.remove('drop-removal');drag.source.classList.remove('drag-origin');
+ if(drag.source.hasPointerCapture?.(drag.pointerId))drag.source.releasePointerCapture(drag.pointerId);
+ if(!drag.active)return;
+ suppressCardClickUntil=performance.now()+450;event?.preventDefault();
+ const drop=cancelled?{valid:false,reason:'Placement cancelled.'}:currentDrop(drag,event?.clientX??drag.x,event?.clientY??drag.y);
+ if(drop.valid){
+   drag.ghost.remove();
+   if(drop.remove){state.category='all';editPlan(state.selections.filter(item=>item.measureId!==drag.id));const returned=$('projects').querySelector(`[data-measure="${drag.id}"]`);returned?.scrollIntoView({block:'nearest',inline:'center'});message('Project returned to the hand.');}
+   else {editPlan(drop.selections);message(`${measures.get(drag.id).name} · ${districtName(drop.selection.districtId)}`);}
+ }else{
+   message(drop.reason,!cancelled);
+   if(state.reducedMotion)drag.ghost.remove();
+   else {const animation=drag.ghost.animate([{left:drag.ghost.style.left,top:drag.ghost.style.top,opacity:1},{left:`${drag.rect.left+drag.rect.width/2-43}px`,top:`${drag.rect.top+drag.rect.height/2-53}px`,opacity:0}],{duration:230,easing:'ease-out',fill:'forwards'});animation.finished.then(()=>drag.ghost.remove()).catch(()=>drag.ghost.remove());}
+ }
+}
 let cardArcFrame=0;
 function scheduleCardArc() {
  if(cardArcFrame)return;
@@ -157,13 +284,14 @@ function placeProject(id, districtId=state.districtId) {
  editPlan(candidate);message(`${measure.name} placed ${selection.districtId?`in ${districtName(selection.districtId)}`:'across all five districts'}.`);
 }
 function showProjectDetail(id) {
- const measure=measures.get(id);if(!measure)return;state.peek=id;
- const selected=state.selections.find(item=>item.measureId===id), category=categories.get(measure.category);
+ const measure=measures.get(id);if(!measure)return;hideCardTooltip();if(state.peek!==id)$('peek-expanded').open=false;state.peek=id;
+ const selected=(state.view==='a'?state.pinned?.selections??[]:state.selections).find(item=>item.measureId===id), category=categories.get(measure.category);
  $('project-peek').hidden=false;$('peek-category').textContent=`${category.name} · ${measure.cost} units`;$('peek-title').textContent=measure.name;$('peek-description').textContent=measure.description;
- $('peek-effects').replaceChildren(...Object.entries(measure.effects).map(([indicator,value])=>node('span',`effect-chip${value<0?' negative':''}`,`${DATASET.indicators.find(item=>item.id===indicator)?.name??indicator} ${signed(value,0)}`)));
+ $('peek-effects').replaceChildren(...Object.entries(measure.effects).map(([indicator,value])=>node('span',`effect-chip${value<0?' negative':''}`,`${effectIcons[indicator]??indicator} ${signed(value,0)}`,{title:`${DATASET.indicators.find(item=>item.id===indicator)?.name??indicator} ${signed(value,0)} (base effect)`,'aria-label':`${DATASET.indicators.find(item=>item.id===indicator)?.name??indicator} ${signed(value,0)}`})));
+ $('peek-effect-description').textContent=Object.entries(measure.effects).map(([indicator,value])=>`${DATASET.indicators.find(item=>item.id===indicator)?.name??indicator} ${signed(value,0)}`).join(' · ');
  $('peek-meta').textContent=`Base effects before delay · completes in quarter ${measure.lag} · ${measure.scope==='city'?'City-wide':'One district'}`;
- $('peek-action').textContent=selected?`Placed: ${districtName(selected.districtId)}. Manage districts and locks in Project slots.`:state.pending===id?'Now click a district on the map or use its labeled button.':measure.scope==='city'?'Select this card to add it across all five districts.':'Select this card, then choose its district.';
- const action=$('place-current');action.hidden=!selected&&state.pending!==id;action.disabled=Boolean(state.run);
+ $('peek-action').textContent=selected?districtName(selected.districtId):state.pending===id?'Choose a district.':measure.scope==='city'?'All five districts':'One district';
+ const action=$('place-current');action.hidden=(!selected&&state.pending!==id)||state.view==='a';action.disabled=Boolean(state.run);
  action.textContent=selected?'Remove this project':`Place in ${districtName(state.districtId)}`;
 }
 function renderProjects() {
@@ -171,11 +299,11 @@ function renderProjects() {
  const savedScroll=$('projects').scrollLeft;
  const shortCategories={transport:'Transport',ecology:'Ecology',social:'Social',safety:'Safety',services:'Services'};
  $('category-filters').replaceChildren(...[{id:'all',name:'All'},...DATASET.categories].map(category=>button(shortCategories[category.id]??category.name,'filter',()=>{state.category=category.id;$('projects').scrollLeft=0;state.pending=null;state.peek=null;$('project-peek').hidden=true;message();render();},{'aria-pressed':state.category===category.id,'data-focus':`filter-${category.id}`})));
- const visible=DATASET.measures.filter(measure=>state.category==='all'||measure.category===state.category);$('project-total').textContent=visible.length;
+ const visible=DATASET.measures.filter(measure=>(state.category==='all'||measure.category===state.category)&&!state.selections.some(item=>item.measureId===measure.id));$('project-total').textContent=visible.length;
  $('projects').replaceChildren(...visible.map(measure=>{
    const selected=state.selections.find(item=>item.measureId===measure.id), validTargets=(measure.scope==='city'?[null]:DATASET.districts.map(item=>item.id)).some(districtId=>validatePlan([...state.selections,{measureId:measure.id,districtId}],{allowPartial:true}).valid);
    const card=button('',`project-tile${selected?' selected':''}${state.pending===measure.id?' pending':''}${!selected&&!validTargets?' blocked':''}`,()=>{
-     if(state.run)return;
+     if(state.run||performance.now()<suppressCardClickUntil)return;
      if(selected){showProjectDetail(measure.id);return;}
      if(!validTargets){showProjectDetail(measure.id);const checked=validatePlan([...state.selections,{measureId:measure.id,districtId:measure.scope==='city'?null:state.districtId}],{allowPartial:true});message(checked.errors.map(error=>error.message).join(' '),true);return;}
      if(measure.scope==='city'){placeProject(measure.id);return;}
@@ -184,10 +312,8 @@ function renderProjects() {
    card.style.setProperty('--category',categories.get(measure.category).color);card.disabled=Boolean(state.run);
    const cost=node('span','tile-cost',measure.cost);cost.append(node('small','','units'));
    card.append(projectArt(measure.id),cost,node('span','tile-name',projectNames[measure.id]),node('span','tile-scope',selected?`✓ ${districtName(selected.districtId)}`:measure.scope==='city'?'City-wide':`District · ${measure.lag}q build`));
-   card.addEventListener('pointerenter',event=>{if(event.pointerType==='touch')return;highlightCard(measure.id);if(!state.pending)showProjectDetail(measure.id);});
-   card.addEventListener('pointerleave',clearCardHighlight);
-   card.addEventListener('focus',()=>{highlightCard(measure.id);showProjectDetail(measure.id);});
-   card.addEventListener('blur',clearCardHighlight);
+   bindProjectPointer(card,measure.id);
+   bindCardDrag(card,measure.id,false);
    card.addEventListener('keydown',event=>{
      const cards=[...$('projects').children],index=cards.indexOf(card);
      const next=event.key==='ArrowRight'?cards[index+1]:event.key==='ArrowLeft'?cards[index-1]:event.key==='Home'?cards[0]:event.key==='End'?cards.at(-1):null;
@@ -209,7 +335,8 @@ function renderResults(validation) {
   const weakest = [...displayed.districts].sort((a, b) => a.score - b.score)[0];
   const weakCard = node('div', 'summary-metric'); weakCard.append(node('span', '', 'Weakest district'), node('strong', '', weakest?.name ?? '—'), node('small', '', `${fmt(weakest?.score)} district index`));
   const criticalCard = node('div', 'summary-metric'); criticalCard.append(node('span', '', 'Critical indicators'), node('strong', '', displayed.criticalCount), node('small', '', hasOutcome ? `${BASELINE.criticalCount} at baseline · below 40` : 'Values strictly below 40'));
-  metrics.append(weakCard, criticalCard); headline.replaceChildren(caption, score, note, metrics);
+  const explanation=node('details','result-notes');explanation.append(node('summary','','Details'),note);
+  metrics.append(weakCard, criticalCard); headline.replaceChildren(caption, score, metrics, explanation);
   const validationBox = $('validation');
   if (state.view === 'a' && state.pinned) validationBox.replaceChildren(node('p', 'valid-message', `✓ Pinned Plan A · ${state.pinned.result.cost} / ${DATASET.budget} units · 5 projects`));
   else if (state.run) validationBox.replaceChildren(node('p', 'valid-message', `Construction replay · quarter ${state.run.quarter} / 8. Official result at quarter 8.`));
@@ -273,6 +400,7 @@ function renderProjectChanges(mode) {
   return compared ? (mode==='a'?removed:added).map(selectionKey) : [];
 }
 function render() {
+  if(activeDrag)finishCardDrag(null,true);
   if (!DATASET) return;
   const activeFocus = document.activeElement?.getAttribute('data-focus');
   const validation = validatePlan(state.selections);
@@ -297,7 +425,7 @@ function render() {
   document.querySelectorAll('[data-view]').forEach((item) => { item.setAttribute('aria-pressed', item.dataset.view === state.view); item.disabled = Boolean(state.run) || (item.dataset.view === 'a' && !state.pinned); });
   document.querySelectorAll('[data-speed]').forEach(item => item.setAttribute('aria-pressed', Number(item.dataset.speed) === state.speed));
   $('district-shortcuts').replaceChildren(...DATASET.districts.map((district) => button(district.name, '', () => chooseDistrict(district.id), { 'aria-pressed': district.id === state.districtId, 'data-focus': `district-${district.id}` })));
-  renderSlots(); renderProjects(); renderResults(validation);
+  renderSlots(); renderProjects(); renderPlacedProjects(); renderResults(validation);
   const mode = state.view === 'before' ? 'before' : state.view === 'a' ? 'a' : state.applied || state.run ? 'after' : 'draft';
   const highlightKeys = renderProjectChanges(mode);
   $('scene-state').textContent = state.run ? `Q${state.run.quarter} / 8 · ${state.run.quarter ? 'ILLUSTRATIVE REPLAY' : 'BASELINE'}${state.paused ? ' · PAUSED' : ''}` : { before: 'BASELINE CITY', a: 'PINNED PLAN A', after: 'YOUR FUTURE CITY', draft: state.selections.length ? 'DRAFT · PROJECT PREVIEW' : 'BASELINE CITY' }[mode];
@@ -318,8 +446,9 @@ function renderHud() {
  $('plan-comparison').textContent=state.pinned&&state.applied?`Plan A ${fmt(state.pinned.result.score)} → current plan ${fmt(state.applied.result.score)} · ${signed(state.applied.result.score-state.pinned.result.score)} official score. Cost ${state.pinned.result.cost} → ${state.applied.result.cost}.`:state.pinned?`Plan A is saved at ${fmt(state.pinned.result.score)}. Complete your current run to compare.`:'Pin a completed plan, change one choice, then compare the two futures.';
  $('voice-controls').hidden=!document.querySelector('.adviser-text')||!official||state.view!=='after';
 }
-function openDialog(id) { clearCardHighlight();document.querySelectorAll('dialog[open]').forEach(item=>{if(item.id!==id)item.close();}); const dialog=$(id); if(!dialog.open)dialog.showModal(); }
+function openDialog(id) { if(activeDrag)finishCardDrag(null,true);hideCardTooltip();clearCardHighlight();document.querySelectorAll('dialog[open]').forEach(item=>{if(item.id!==id)item.close();}); const dialog=$(id); if(!dialog.open)dialog.showModal(); }
 function applyPlan() {
+ if(activeDrag)finishCardDrag(null,true);
  const timeline=timelinePlan(state.selections);
  if(!timeline.valid){message(timeline.errors.map(error=>error.message).join(' '),true);render();return;}
  invalidateAdvice();state.pending=null;state.peek=null;$('project-peek').hidden=true;
@@ -425,6 +554,14 @@ function showSuggestion(data) {
   $('suggestion-output').replaceChildren(card);
 }
 function bindControls() {
+ window.addEventListener('click',event=>{if(performance.now()<suppressCardClickUntil){event.preventDefault();event.stopImmediatePropagation();}},true);
+ window.addEventListener('pointermove',moveCardDrag,{passive:false});
+ window.addEventListener('pointerup',event=>finishCardDrag(event));
+ window.addEventListener('pointercancel',event=>finishCardDrag(event,true));
+ window.addEventListener('blur',()=>{if(activeDrag)finishCardDrag(null,true);hideCardTooltip();});
+ document.addEventListener('visibilitychange',()=>{if(document.hidden){if(activeDrag)finishCardDrag(null,true);hideCardTooltip();}});
+ window.addEventListener('keydown',event=>{if(event.key==='Escape'&&activeDrag){event.preventDefault();finishCardDrag(null,true);}});
+ setInterval(()=>{if(!document.hidden&&!activeDrag)positionPlacedProjects();},100);
  $('projects').addEventListener('scroll',()=>{
    const focused=document.activeElement;
    if(focused?.dataset.measure&&focused.matches(':focus-visible'))highlightCard(focused.dataset.measure);else clearCardHighlight();
@@ -453,19 +590,19 @@ function bindControls() {
   document.querySelectorAll('[data-view]').forEach((item) => item.addEventListener('click', () => { if (item.dataset.view === 'a' && !state.pinned) return; stopVoice(); state.view = item.dataset.view; render(); }));
   $('pause-city').addEventListener('click', () => { state.paused = !state.paused; render(); });
   $('reset-view').addEventListener('click', () => city?.resetView());
-  $('get-advice').addEventListener('click', () => requestAnalysis('advice'));
-  $('get-improvement').addEventListener('click', () => requestAnalysis('suggest'));
+  $('get-advice').addEventListener('click', () => { $('briefing-details').open=true;requestAnalysis('advice'); });
+  $('get-improvement').addEventListener('click', () => { $('briefing-details').open=true;requestAnalysis('suggest'); });
   $('export-plan').addEventListener('click', () => {
     if (!state.applied) return;
     const payload = { datasetVersion: DATASET.version, selections: state.applied.selections, result: state.applied.result, lockedMeasureIds: [...state.locks], assumptions: 'Organizer-supplied synthetic scenario. Geographic backdrop is real; buildings, projects and reactions are illustrative.', geographyCredit: $('geography-credit').textContent };
     const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
     const link = node('a', '', '', { href: url, download: 'akim-lab-plan.json' }); document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
-  $('print-plan').addEventListener('click', () => { state.view = 'after'; render(); window.print(); });
+  $('print-plan').addEventListener('click', () => { state.view = 'after'; render();const closed=[...$('report-dialog').querySelectorAll('details:not([open])')];closed.forEach(item=>item.open=true);window.addEventListener('afterprint',()=>closed.forEach(item=>item.open=false),{once:true});window.print(); });
 }
 async function boot() {
   // The planner must still boot if the separate 3D module cannot load.
-  const sceneReady = import('./city.js?v=20260923-r09').then(({ createCity }) => {
+  const sceneReady = import('./city.js?v=20260923-r13').then(({ createCity }) => {
     city = createCity({ canvasHost: $('city-canvas'), labelsHost: $('city-labels'), reactionsHost: $('city-reactions'), fallbackHost: $('city-fallback'), loadingHost: $('scene-loading'), onDistrictSelect: (id) => chooseDistrict(id), onDistrictHover: (id) => { $('hover-district').textContent = id === 'sarayshyk' ? 'Sarayshyk · outside scenario' : id ? districtName(id) : ''; }, onCredit: (text, attributionUrl) => { $('geography-credit').textContent = text; if(attributionUrl) { try { const url=new URL(attributionUrl); if(['https:','http:'].includes(url.protocol)) $('geography-credit').append(document.createTextNode(' '),node('a','','Map source and attribution',{href:url.href,target:'_blank',rel:'noopener noreferrer'})); } catch { /* Keep the provided credit text if its optional URL is malformed. */ } } } });
     return city.ready.then(() => render());
   }).catch((error) => {
