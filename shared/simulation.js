@@ -65,6 +65,12 @@ const freshDistricts=()=>DATASET.districts.map(d=>({...d,indicators:{...d.indica
 export const BASELINE=deepFreeze(scoreDistricts(freshDistricts()));
 
 export function simulatePlan(selections) {
+  return evaluatePlan(selections,DATASET.horizon);
+}
+
+// Intermediate frames are a visual convention, not an extra organizer model.
+// Reuse the official evaluator so clipping, synergies and scoring cannot drift.
+function evaluatePlan(selections,quarter) {
   const validation=validatePlan(selections);
   if (!validation.valid) return {...validation,selections:[],score:null,delta:null,average:null,minimum:null,
     criticalCount:null,districts:[],criticalIndicators:[],synergies:[],contributions:[],breakdown:null,weakestDistrictIds:[]};
@@ -72,14 +78,14 @@ export function simulatePlan(selections) {
   const byId=new Map(districts.map(d=>[d.id,d]));
   const contributions=[], synergies=[];
   for (const selection of sorted) {
-    const m=measures.get(selection.measureId), realizedFraction=(DATASET.horizon-m.lag)/DATASET.horizon;
+    const m=measures.get(selection.measureId), realizedFraction=Math.max(0,quarter-m.lag)/DATASET.horizon;
     const effects=Object.fromEntries(Object.entries(m.effects).map(([key,value])=>[key,value*realizedFraction]));
     const targets=m.scope==='city' ? districts : [byId.get(selection.districtId)];
     for (const d of targets) for (const [key,value] of Object.entries(effects)) d.indicators[key]+=value;
     contributions.push({...selection,cost:m.cost,realizedFraction,effects,districtIds:targets.map(d=>d.id)});
   }
   const where=new Map(sorted.map(s=>[s.measureId,s.districtId]));
-  for (const rule of DATASET.synergies) if (rule.measures.every(id=>where.has(id))) {
+  for (const rule of DATASET.synergies) if (rule.measures.every(id=>where.has(id) && quarter>measures.get(id).lag)) {
     const districtId=where.get(rule.targetMeasure), district=byId.get(districtId);
     for (const [key,value] of Object.entries(rule.effects)) district.indicators[key]+=value;
     synergies.push({measures:rule.measures.slice(),districtId,effects:{...rule.effects},description:rule.description});
@@ -95,4 +101,15 @@ export function simulatePlan(selections) {
   const result=scoreDistricts(districts);
   for (const d of districts) d.delta=d.score-BASELINE.districts.find(b=>b.id===d.id).score;
   return {...validation,...result,selections:sorted,delta:result.score-BASELINE.score,synergies,contributions};
+}
+
+export function timelinePlan(selections) {
+  const result=simulatePlan(selections);
+  if(!result.valid) return {valid:false,errors:result.errors,cost:result.cost,frames:[]};
+  const frames=Array.from({length:DATASET.horizon+1},(_,quarter)=>({
+    quarter,illustrative:quarter>0 && quarter<DATASET.horizon,official:quarter===DATASET.horizon,
+    completedMeasureIds:result.selections.filter(s=>quarter>=measures.get(s.measureId).lag).map(s=>s.measureId),
+    result:quarter===DATASET.horizon?result:evaluatePlan(result.selections,quarter),
+  }));
+  return {valid:true,errors:[],cost:result.cost,frames};
 }

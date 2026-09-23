@@ -7,6 +7,7 @@ import { getAdvice } from '../server/adviser.mjs';
 import { verifiedFacts, renderSelectedFacts } from '../server/verified-facts.mjs';
 import { buildEvidence } from '../server/adviser.mjs';
 import { EXAMPLE_PLAN } from '../shared/city-data.js';
+import { synthesizeSpeech } from '../server/speech.mjs';
 let server,base;
 before(async()=>{server=createAppServer({apiKey:''});server.listen(0,'127.0.0.1');await once(server,'listening');base=`http://127.0.0.1:${server.address().port}`;});
 after(async()=>{server.closeAllConnections();await new Promise(r=>server.close(r));});
@@ -115,4 +116,44 @@ test('AI fact selection cannot hide an adverse effect or remaining critical indi
   const text=renderSelectedFacts(facts,{strengthIds:['gain_nura_S1'],riskIds:['scope']});
   assert.match(text,/Almaty: road flow falls by 1\.75 to 38\.25/);
   assert.match(text,/Almaty still has a critical road flow indicator at 38\.25/);
+});
+
+test('speech endpoint validates text, preserves origin protection and has a no-key fallback',async()=>{
+  assert.equal((await post('/api/speech',{text:'Your city plan is ready.'})).status,503);
+  for(const text of ['',null,12,' '.repeat(3),'a'.repeat(4001)])assert.equal((await post('/api/speech',{text})).status,400);
+  assert.equal((await post('/api/speech',{text:'Ready.'},{Origin:'https://untrusted.example'})).status,403);
+  assert.equal((await post('/api/speech',{text:'Ready.'},{'Content-Type':'text/plain'})).status,415);
+});
+
+test('speech transport preserves briefing text and never returns upstream error details',async()=>{
+  const input='The score is 56.54. Road flow falls by 1.75.',sample=Buffer.from('ID3 transport fixture');
+  const bytes=await synthesizeSpeech(input,{apiKey:'fake-test-only',fetchImpl:async(url,options)=>{
+    assert.equal(url,'https://api.openai.com/v1/audio/speech');
+    const body=JSON.parse(options.body);assert.equal(body.input,input);assert.equal(body.voice,'cedar');
+    assert.equal(body.model,'gpt-4o-mini-tts');assert.equal(body.response_format,'mp3');
+    return {ok:true,arrayBuffer:async()=>sample};
+  }});
+  assert.deepEqual(bytes,sample);
+  for(const fetchImpl of [async()=>{throw new Error('secret upstream details');},async()=>({ok:false})]) {
+    await assert.rejects(synthesizeSpeech(input,{apiKey:'fake-test-only',fetchImpl}),error=>error.status===503 && !error.message.includes('secret'));
+  }
+});
+
+test('speech HTTP delivers audio, discloses its source and reuses identical requests',async()=>{
+  const sample=Buffer.from('ID3 transport fixture');let calls=0;
+  const speechServer=createAppServer({apiKey:'fake-test-only',speechFn:async text=>{
+    calls++;assert.equal(text,'Ready.');return sample;
+  }});
+  speechServer.listen(0,'127.0.0.1');await once(speechServer,'listening');
+  try {
+    for(let i=0;i<2;i++) {
+      const response=await fetch(`http://127.0.0.1:${speechServer.address().port}/api/speech`,{
+        method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:'Ready.'}),
+      });
+      assert.equal(response.status,200);assert.equal(response.headers.get('content-type'),'audio/mpeg');
+      assert.equal(response.headers.get('x-audio-source'),'AI-generated voice');
+      assert.deepEqual(Buffer.from(await response.arrayBuffer()),sample);
+    }
+    assert.equal(calls,1);
+  } finally {speechServer.closeAllConnections();await new Promise(resolve=>speechServer.close(resolve));}
 });

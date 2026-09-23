@@ -62,6 +62,6 @@ object IDs and geometry are used; no property-owner attributes are included.
 
 Procedural ordinary buildings, new project sites, cars, people and their reactions
 illustrate the scenario. They are not a cadastral inventory, traffic forecast or
-measurement of real resident sentiment. New development avoids mapped park and
+measurement of real resident sentiment. Renderers must keep new development outside mapped park and
 landmark footprints. Actual mapped parks/landmarks do not add scoring districts,
 measures or benefits to the synthetic scenario.
