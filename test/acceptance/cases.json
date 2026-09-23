@@ -1,0 +1,1417 @@
+{
+ "about": "Expected values from test/acceptance/oracle.py, an independent Python implementation of the Track 12 dataset rules. Scores rounded to 5 decimals; compare with tolerance.",
+ "tolerance": 0.0001,
+ "districtIds": [
+  "esil",
+  "almaty",
+  "saryarka",
+  "baikonur",
+  "nura"
+ ],
+ "planFormat": "list of {measure, district}; district is null for city-wide measures (M2, M6, M12, M14)",
+ "reasonCodes": [
+  "COUNT",
+  "BUDGET",
+  "DUPLICATE",
+  "DISTRICT_REQUIRED",
+  "DISTRICT_NOT_ALLOWED",
+  "UNKNOWN_MEASURE",
+  "UNKNOWN_DISTRICT",
+  "DIRECTION_LIMIT",
+  "INCOMPATIBLE"
+ ],
+ "baseline": {
+  "score": 52.55768,
+  "cityAverage": 56.8624,
+  "weakestDistrictScore": 49.18,
+  "criticalCount": 2,
+  "critical": [
+   {
+    "district": "nura",
+    "indicator": "S1",
+    "value": 38
+   },
+   {
+    "district": "nura",
+    "indicator": "S2",
+    "value": 35
+   }
+  ],
+  "districtScores": {
+   "esil": 62.99,
+   "almaty": 57.06,
+   "saryarka": 54.65,
+   "baikonur": 56.63,
+   "nura": 49.18
+  }
+ },
+ "search": {
+  "validPlanCount": 694395,
+  "bestScore": 57.23673,
+  "bestPlan": [
+   {
+    "measure": "M2",
+    "district": null
+   },
+   {
+    "measure": "M3",
+    "district": "nura"
+   },
+   {
+    "measure": "M8",
+    "district": "nura"
+   },
+   {
+    "measure": "M9",
+    "district": "nura"
+   },
+   {
+    "measure": "M14",
+    "district": null
+   }
+  ],
+  "medianScore": 53.82579,
+  "worstScore": 52.04092,
+  "publishedExampleBeatsShare": 0.99918
+ },
+ "cases": [
+  {
+   "id": "published_example",
+   "note": "Worked example from the dataset PDF (cost 95, about 56.5, M10+M12 synergy).",
+   "plan": [
+    {
+     "measure": "M7",
+     "district": "nura"
+    },
+    {
+     "measure": "M8",
+     "district": "nura"
+    },
+    {
+     "measure": "M10",
+     "district": "nura"
+    },
+    {
+     "measure": "M12",
+     "district": null
+    },
+    {
+     "measure": "M5",
+     "district": "saryarka"
+    }
+   ],
+   "expect": {
+    "valid": true,
+    "cost": 95,
+    "score": 56.54307,
+    "cityAverage": 58.0776,
+    "weakestDistrictScore": 52.9625,
+    "weakestDistrict": "nura",
+    "criticalCount": 0,
+    "critical": [],
+    "synergies": [
+     {
+      "pair": [
+       "M10",
+       "M12"
+      ],
+      "district": "nura",
+      "indicator": "B1",
+      "bonus": 2
+     }
+    ],
+    "districtScores": {
+     "esil": 63.4275,
+     "almaty": 57.4975,
+     "saryarka": 56.3,
+     "baikonur": 57.0675,
+     "nura": 52.9625
+    }
+   }
+  },
+  {
+   "id": "cheapest_published_set",
+   "note": "Cheapest set named in the PDF (cost 61); districts chosen by the tester.",
+   "plan": [
+    {
+     "measure": "M4",
+     "district": "saryarka"
+    },
+    {
+     "measure": "M9",
+     "district": "nura"
+    },
+    {
+     "measure": "M10",
+     "district": "nura"
+    },
+    {
+     "measure": "M11",
+     "district": "esil"
+    },
+    {
+     "measure": "M12",
+     "district": null
+    }
+   ],
+   "expect": {
+    "valid": true,
+    "cost": 61,
+    "score": 55.17131,
+    "cityAverage": 58.0817,
+    "weakestDistrictScore": 51.71375,
+    "weakestDistrict": "nura",
+    "criticalCount": 1,
+    "critical": [
+     {
+      "district": "nura",
+      "indicator": "S2",
+      "value": 37.625
+     }
+    ],
+    "synergies": [
+     {
+      "pair": [
+       "M10",
+       "M12"
+      ],
+      "district": "nura",
+      "indicator": "B1",
+      "bonus": 2
+     }
+    ],
+    "districtScores": {
+     "esil": 64.1975,
+     "almaty": 57.4975,
+     "saryarka": 56.28,
+     "baikonur": 57.0675,
+     "nura": 51.71375
+    }
+   }
+  },
+  {
+   "id": "new_critical_from_M11",
+   "note": "M11 lowers Almaty T1 from 40 to 38.25, creating one critical value; Nura criticals are fixed.",
+   "plan": [
+    {
+     "measure": "M11",
+     "district": "almaty"
+    },
+    {
+     "measure": "M7",
+     "district": "nura"
+    },
+    {
+     "measure": "M8",
+     "district": "nura"
+    },
+    {
+     "measure": "M12",
+     "district": null
+    },
+    {
+     "measure": "M4",
+     "district": "saryarka"
+    }
+   ],
+   "expect": {
+    "valid": true,
+    "cost": 83,
+    "score": 55.14124,
+    "cityAverage": 58.0532,
+    "weakestDistrictScore": 51.68,
+    "weakestDistrict": "nura",
+    "criticalCount": 1,
+    "critical": [
+     {
+      "district": "almaty",
+      "indicator": "T1",
+      "value": 38.25
+     }
+    ],
+    "synergies": [],
+    "districtScores": {
+     "esil": 63.4275,
+     "almaty": 58.2675,
+     "saryarka": 56.28,
+     "baikonur": 57.0675,
+     "nura": 51.68
+    }
+   }
+  },
+  {
+   "id": "synergy_M1_M2_and_M10_M12",
+   "note": "Two synergies in Nura: T1 +2 and B1 +2.",
+   "plan": [
+    {
+     "measure": "M1",
+     "district": "nura"
+    },
+    {
+     "measure": "M2",
+     "district": null
+    },
+    {
+     "measure": "M8",
+     "district": "nura"
+    },
+    {
+     "measure": "M10",
+     "district": "nura"
+    },
+    {
+     "measure": "M12",
+     "district": null
+    }
+   ],
+   "expect": {
+    "valid": true,
+    "cost": 86,
+    "score": 55.96852,
+    "cityAverage": 58.3736,
+    "weakestDistrictScore": 53.69,
+    "weakestDistrict": "nura",
+    "criticalCount": 1,
+    "critical": [
+     {
+      "district": "nura",
+      "indicator": "S1",
+      "value": 38
+     }
+    ],
+    "synergies": [
+     {
+      "pair": [
+       "M1",
+       "M2"
+      ],
+      "district": "nura",
+      "indicator": "T1",
+      "bonus": 2
+     },
+     {
+      "pair": [
+       "M10",
+       "M12"
+      ],
+      "district": "nura",
+      "indicator": "B1",
+      "bonus": 2
+     }
+    ],
+    "districtScores": {
+     "esil": 63.93,
+     "almaty": 58.0,
+     "saryarka": 55.59,
+     "baikonur": 57.57,
+     "nura": 53.69
+    }
+   }
+  },
+  {
+   "id": "synergy_M5_M6",
+   "note": "M5+M6 synergy: E2 +2 in Saryarka.",
+   "plan": [
+    {
+     "measure": "M5",
+     "district": "saryarka"
+    },
+    {
+     "measure": "M6",
+     "district": null
+    },
+    {
+     "measure": "M8",
+     "district": "nura"
+    },
+    {
+     "measure": "M7",
+     "district": "nura"
+    },
+    {
+     "measure": "M11",
+     "district": "esil"
+    }
+   ],
+   "expect": {
+    "valid": true,
+    "cost": 99,
+    "score": 56.14351,
+    "cityAverage": 58.0768,
+    "weakestDistrictScore": 51.6325,
+    "weakestDistrict": "nura",
+    "criticalCount": 0,
+    "critical": [],
+    "synergies": [
+     {
+      "pair": [
+       "M5",
+       "M6"
+      ],
+      "district": "saryarka",
+      "indicator": "E2",
+      "bonus": 2
+     }
+    ],
+    "districtScores": {
+     "esil": 64.15,
+     "almaty": 57.45,
+     "saryarka": 56.4725,
+     "baikonur": 57.02,
+     "nura": 51.6325
+    }
+   }
+  },
+  {
+   "id": "M4_M7_different_districts_ok",
+   "note": "M4 and M7 are allowed in different districts.",
+   "plan": [
+    {
+     "measure": "M4",
+     "district": "esil"
+    },
+    {
+     "measure": "M7",
+     "district": "nura"
+    },
+    {
+     "measure": "M9",
+     "district": "almaty"
+    },
+    {
+     "measure": "M10",
+     "district": "baikonur"
+    },
+    {
+     "measure": "M12",
+     "district": null
+    }
+   ],
+   "expect": {
+    "valid": true,
+    "cost": 75,
+    "score": 54.92718,
+    "cityAverage": 58.1599,
+    "weakestDistrictScore": 50.7175,
+    "weakestDistrict": "nura",
+    "criticalCount": 1,
+    "critical": [
+     {
+      "district": "nura",
+      "indicator": "S2",
+      "value": 35
+     }
+    ],
+    "synergies": [
+     {
+      "pair": [
+       "M10",
+       "M12"
+      ],
+      "district": "baikonur",
+      "indicator": "B1",
+      "bonus": 2
+     }
+    ],
+    "districtScores": {
+     "esil": 64.62,
+     "almaty": 58.31125,
+     "saryarka": 55.0875,
+     "baikonur": 58.35,
+     "nura": 50.7175
+    }
+   }
+  },
+  {
+   "id": "exact_budget_100",
+   "note": "Spends exactly 100; one of the best plans.",
+   "plan": [
+    {
+     "measure": "M3",
+     "district": "nura"
+    },
+    {
+     "measure": "M7",
+     "district": "nura"
+    },
+    {
+     "measure": "M8",
+     "district": "nura"
+    },
+    {
+     "measure": "M10",
+     "district": "nura"
+    },
+    {
+     "measure": "M12",
+     "district": null
+    }
+   ],
+   "expect": {
+    "valid": true,
+    "cost": 100,
+    "score": 57.20556,
+    "cityAverage": 58.1583,
+    "weakestDistrictScore": 54.9825,
+    "weakestDistrict": "nura",
+    "criticalCount": 0,
+    "critical": [],
+    "synergies": [
+     {
+      "pair": [
+       "M10",
+       "M12"
+      ],
+      "district": "nura",
+      "indicator": "B1",
+      "bonus": 2
+     }
+    ],
+    "districtScores": {
+     "esil": 63.4275,
+     "almaty": 57.4975,
+     "saryarka": 55.0875,
+     "baikonur": 57.0675,
+     "nura": 54.9825
+    }
+   }
+  },
+  {
+   "id": "four_measures",
+   "plan": [
+    {
+     "measure": "M9",
+     "district": "nura"
+    },
+    {
+     "measure": "M10",
+     "district": "nura"
+    },
+    {
+     "measure": "M12",
+     "district": null
+    },
+    {
+     "measure": "M4",
+     "district": "esil"
+    }
+   ],
+   "expect": {
+    "valid": false,
+    "reasons": [
+     "COUNT"
+    ]
+   }
+  },
+  {
+   "id": "six_measures",
+   "plan": [
+    {
+     "measure": "M9",
+     "district": "nura"
+    },
+    {
+     "measure": "M10",
+     "district": "nura"
+    },
+    {
+     "measure": "M11",
+     "district": "esil"
+    },
+    {
+     "measure": "M12",
+     "district": null
+    },
+    {
+     "measure": "M4",
+     "district": "esil"
+    },
+    {
+     "measure": "M1",
+     "district": "nura"
+    }
+   ],
+   "expect": {
+    "valid": false,
+    "reasons": [
+     "COUNT"
+    ]
+   }
+  },
+  {
+   "id": "over_budget",
+   "plan": [
+    {
+     "measure": "M3",
+     "district": "nura"
+    },
+    {
+     "measure": "M13",
+     "district": "almaty"
+    },
+    {
+     "measure": "M5",
+     "district": "saryarka"
+    },
+    {
+     "measure": "M7",
+     "district": "esil"
+    },
+    {
+     "measure": "M2",
+     "district": null
+    }
+   ],
+   "expect": {
+    "valid": false,
+    "reasons": [
+     "BUDGET"
+    ]
+   }
+  },
+  {
+   "id": "duplicate_measure",
+   "plan": [
+    {
+     "measure": "M9",
+     "district": "nura"
+    },
+    {
+     "measure": "M9",
+     "district": "esil"
+    },
+    {
+     "measure": "M10",
+     "district": "nura"
+    },
+    {
+     "measure": "M12",
+     "district": null
+    },
+    {
+     "measure": "M4",
+     "district": "esil"
+    }
+   ],
+   "expect": {
+    "valid": false,
+    "reasons": [
+     "DUPLICATE"
+    ]
+   }
+  },
+  {
+   "id": "district_missing",
+   "plan": [
+    {
+     "measure": "M7",
+     "district": null
+    },
+    {
+     "measure": "M8",
+     "district": "nura"
+    },
+    {
+     "measure": "M10",
+     "district": "nura"
+    },
+    {
+     "measure": "M12",
+     "district": null
+    },
+    {
+     "measure": "M5",
+     "district": "saryarka"
+    }
+   ],
+   "expect": {
+    "valid": false,
+    "reasons": [
+     "DISTRICT_REQUIRED"
+    ]
+   }
+  },
+  {
+   "id": "district_on_city_measure",
+   "plan": [
+    {
+     "measure": "M7",
+     "district": "nura"
+    },
+    {
+     "measure": "M8",
+     "district": "nura"
+    },
+    {
+     "measure": "M10",
+     "district": "nura"
+    },
+    {
+     "measure": "M12",
+     "district": "esil"
+    },
+    {
+     "measure": "M5",
+     "district": "saryarka"
+    }
+   ],
+   "expect": {
+    "valid": false,
+    "reasons": [
+     "DISTRICT_NOT_ALLOWED"
+    ]
+   }
+  },
+  {
+   "id": "unknown_measure",
+   "plan": [
+    {
+     "measure": "M15",
+     "district": "nura"
+    },
+    {
+     "measure": "M8",
+     "district": "nura"
+    },
+    {
+     "measure": "M10",
+     "district": "nura"
+    },
+    {
+     "measure": "M12",
+     "district": null
+    },
+    {
+     "measure": "M5",
+     "district": "saryarka"
+    }
+   ],
+   "expect": {
+    "valid": false,
+    "reasons": [
+     "UNKNOWN_MEASURE"
+    ]
+   }
+  },
+  {
+   "id": "unknown_district",
+   "plan": [
+    {
+     "measure": "M7",
+     "district": "downtown"
+    },
+    {
+     "measure": "M8",
+     "district": "nura"
+    },
+    {
+     "measure": "M10",
+     "district": "nura"
+    },
+    {
+     "measure": "M12",
+     "district": null
+    },
+    {
+     "measure": "M5",
+     "district": "saryarka"
+    }
+   ],
+   "expect": {
+    "valid": false,
+    "reasons": [
+     "UNKNOWN_DISTRICT"
+    ]
+   }
+  },
+  {
+   "id": "three_social",
+   "plan": [
+    {
+     "measure": "M7",
+     "district": "nura"
+    },
+    {
+     "measure": "M8",
+     "district": "nura"
+    },
+    {
+     "measure": "M9",
+     "district": "esil"
+    },
+    {
+     "measure": "M10",
+     "district": "nura"
+    },
+    {
+     "measure": "M12",
+     "district": null
+    }
+   ],
+   "expect": {
+    "valid": false,
+    "reasons": [
+     "DIRECTION_LIMIT"
+    ]
+   }
+  },
+  {
+   "id": "M1_and_M3",
+   "plan": [
+    {
+     "measure": "M1",
+     "district": "esil"
+    },
+    {
+     "measure": "M3",
+     "district": "nura"
+    },
+    {
+     "measure": "M9",
+     "district": "nura"
+    },
+    {
+     "measure": "M10",
+     "district": "nura"
+    },
+    {
+     "measure": "M12",
+     "district": null
+    }
+   ],
+   "expect": {
+    "valid": false,
+    "reasons": [
+     "INCOMPATIBLE"
+    ]
+   }
+  },
+  {
+   "id": "M4_M7_same_district",
+   "plan": [
+    {
+     "measure": "M4",
+     "district": "nura"
+    },
+    {
+     "measure": "M7",
+     "district": "nura"
+    },
+    {
+     "measure": "M10",
+     "district": "nura"
+    },
+    {
+     "measure": "M12",
+     "district": null
+    },
+    {
+     "measure": "M9",
+     "district": "esil"
+    }
+   ],
+   "expect": {
+    "valid": false,
+    "reasons": [
+     "INCOMPATIBLE"
+    ]
+   }
+  },
+  {
+   "id": "M5_M13_same_district",
+   "plan": [
+    {
+     "measure": "M5",
+     "district": "saryarka"
+    },
+    {
+     "measure": "M13",
+     "district": "saryarka"
+    },
+    {
+     "measure": "M9",
+     "district": "nura"
+    },
+    {
+     "measure": "M10",
+     "district": "nura"
+    },
+    {
+     "measure": "M11",
+     "district": "esil"
+    }
+   ],
+   "expect": {
+    "valid": false,
+    "reasons": [
+     "INCOMPATIBLE"
+    ]
+   }
+  },
+  {
+   "id": "random_valid_01",
+   "plan": [
+    {
+     "measure": "M4",
+     "district": "almaty"
+    },
+    {
+     "measure": "M5",
+     "district": "saryarka"
+    },
+    {
+     "measure": "M8",
+     "district": "almaty"
+    },
+    {
+     "measure": "M9",
+     "district": "nura"
+    },
+    {
+     "measure": "M10",
+     "district": "baikonur"
+    }
+   ],
+   "expect": {
+    "valid": true,
+    "cost": 82,
+    "score": 54.52506,
+    "cityAverage": 57.89563,
+    "weakestDistrictScore": 49.99375,
+    "weakestDistrict": "nura",
+    "criticalCount": 1,
+    "critical": [
+     {
+      "district": "nura",
+      "indicator": "S2",
+      "value": 37.625
+     }
+    ],
+    "synergies": [],
+    "districtScores": {
+     "esil": 62.99,
+     "almaty": 59.215,
+     "saryarka": 55.8625,
+     "baikonur": 57.7325,
+     "nura": 49.99375
+    }
+   }
+  },
+  {
+   "id": "random_valid_02",
+   "plan": [
+    {
+     "measure": "M2",
+     "district": null
+    },
+    {
+     "measure": "M3",
+     "district": "esil"
+    },
+    {
+     "measure": "M4",
+     "district": "almaty"
+    },
+    {
+     "measure": "M8",
+     "district": "almaty"
+    },
+    {
+     "measure": "M10",
+     "district": "almaty"
+    }
+   ],
+   "expect": {
+    "valid": true,
+    "cost": 99,
+    "score": 53.98922,
+    "cityAverage": 58.6921,
+    "weakestDistrictScore": 49.6825,
+    "weakestDistrict": "nura",
+    "criticalCount": 2,
+    "critical": [
+     {
+      "district": "nura",
+      "indicator": "S1",
+      "value": 38
+     },
+     {
+      "district": "nura",
+      "indicator": "S2",
+      "value": 35
+     }
+    ],
+    "synergies": [],
+    "districtScores": {
+     "esil": 65.5125,
+     "almaty": 60.82,
+     "saryarka": 55.1525,
+     "baikonur": 57.1325,
+     "nura": 49.6825
+    }
+   }
+  },
+  {
+   "id": "random_valid_03",
+   "plan": [
+    {
+     "measure": "M8",
+     "district": "nura"
+    },
+    {
+     "measure": "M9",
+     "district": "esil"
+    },
+    {
+     "measure": "M10",
+     "district": "saryarka"
+    },
+    {
+     "measure": "M12",
+     "district": null
+    },
+    {
+     "measure": "M13",
+     "district": "nura"
+    }
+   ],
+   "expect": {
+    "valid": true,
+    "cost": 84,
+    "score": 55.1412,
+    "cityAverage": 58.09171,
+    "weakestDistrictScore": 51.59,
+    "weakestDistrict": "nura",
+    "criticalCount": 1,
+    "critical": [
+     {
+      "district": "nura",
+      "indicator": "S1",
+      "value": 38
+     }
+    ],
+    "synergies": [
+     {
+      "pair": [
+       "M10",
+       "M12"
+      ],
+      "district": "saryarka",
+      "indicator": "B1",
+      "bonus": 2
+     }
+    ],
+    "districtScores": {
+     "esil": 64.24125,
+     "almaty": 57.4975,
+     "saryarka": 56.37,
+     "baikonur": 57.0675,
+     "nura": 51.59
+    }
+   }
+  },
+  {
+   "id": "random_valid_04",
+   "plan": [
+    {
+     "measure": "M4",
+     "district": "nura"
+    },
+    {
+     "measure": "M7",
+     "district": "saryarka"
+    },
+    {
+     "measure": "M8",
+     "district": "saryarka"
+    },
+    {
+     "measure": "M10",
+     "district": "baikonur"
+    },
+    {
+     "measure": "M14",
+     "district": null
+    }
+   ],
+   "expect": {
+    "valid": true,
+    "cost": 87,
+    "score": 54.05057,
+    "cityAverage": 58.22153,
+    "weakestDistrictScore": 50.985,
+    "weakestDistrict": "nura",
+    "criticalCount": 2,
+    "critical": [
+     {
+      "district": "nura",
+      "indicator": "S1",
+      "value": 38
+     },
+     {
+      "district": "nura",
+      "indicator": "S2",
+      "value": 35
+     }
+    ],
+    "synergies": [],
+    "districtScores": {
+     "esil": 63.6025,
+     "almaty": 57.6725,
+     "saryarka": 57.325,
+     "baikonur": 58.345,
+     "nura": 50.985
+    }
+   }
+  },
+  {
+   "id": "random_valid_05",
+   "plan": [
+    {
+     "measure": "M3",
+     "district": "baikonur"
+    },
+    {
+     "measure": "M4",
+     "district": "saryarka"
+    },
+    {
+     "measure": "M7",
+     "district": "baikonur"
+    },
+    {
+     "measure": "M8",
+     "district": "esil"
+    },
+    {
+     "measure": "M11",
+     "district": "almaty"
+    }
+   ],
+   "expect": {
+    "valid": true,
+    "cost": 99,
+    "score": 52.31982,
+    "cityAverage": 57.95117,
+    "weakestDistrictScore": 49.18,
+    "weakestDistrict": "nura",
+    "criticalCount": 3,
+    "critical": [
+     {
+      "district": "almaty",
+      "indicator": "T1",
+      "value": 38.25
+     },
+     {
+      "district": "nura",
+      "indicator": "S1",
+      "value": 38
+     },
+     {
+      "district": "nura",
+      "indicator": "S2",
+      "value": 35
+     }
+    ],
+    "synergies": [],
+    "districtScores": {
+     "esil": 63.9525,
+     "almaty": 57.83,
+     "saryarka": 55.8425,
+     "baikonur": 59.75,
+     "nura": 49.18
+    }
+   }
+  },
+  {
+   "id": "random_valid_06",
+   "plan": [
+    {
+     "measure": "M1",
+     "district": "esil"
+    },
+    {
+     "measure": "M4",
+     "district": "nura"
+    },
+    {
+     "measure": "M10",
+     "district": "saryarka"
+    },
+    {
+     "measure": "M12",
+     "district": null
+    },
+    {
+     "measure": "M14",
+     "district": null
+    }
+   ],
+   "expect": {
+    "valid": true,
+    "cost": 75,
+    "score": 54.49117,
+    "cityAverage": 58.66345,
+    "weakestDistrictScore": 51.4225,
+    "weakestDistrict": "nura",
+    "criticalCount": 2,
+    "critical": [
+     {
+      "district": "nura",
+      "indicator": "S1",
+      "value": 38
+     },
+     {
+      "district": "nura",
+      "indicator": "S2",
+      "value": 35
+     }
+    ],
+    "synergies": [
+     {
+      "pair": [
+       "M10",
+       "M12"
+      ],
+      "district": "saryarka",
+      "indicator": "B1",
+      "bonus": 2
+     }
+    ],
+    "districtScores": {
+     "esil": 65.165,
+     "almaty": 58.11,
+     "saryarka": 56.9825,
+     "baikonur": 57.68,
+     "nura": 51.4225
+    }
+   }
+  },
+  {
+   "id": "random_valid_07",
+   "plan": [
+    {
+     "measure": "M3",
+     "district": "almaty"
+    },
+    {
+     "measure": "M4",
+     "district": "esil"
+    },
+    {
+     "measure": "M9",
+     "district": "saryarka"
+    },
+    {
+     "measure": "M11",
+     "district": "esil"
+    },
+    {
+     "measure": "M13",
+     "district": "nura"
+    }
+   ],
+   "expect": {
+    "valid": true,
+    "cost": 93,
+    "score": 53.798,
+    "cityAverage": 58.20143,
+    "weakestDistrictScore": 50.19,
+    "weakestDistrict": "nura",
+    "criticalCount": 2,
+    "critical": [
+     {
+      "district": "nura",
+      "indicator": "S1",
+      "value": 38
+     },
+     {
+      "district": "nura",
+      "indicator": "S2",
+      "value": 35
+     }
+    ],
+    "synergies": [],
+    "districtScores": {
+     "esil": 64.9525,
+     "almaty": 59.08,
+     "saryarka": 55.46375,
+     "baikonur": 56.63,
+     "nura": 50.19
+    }
+   }
+  },
+  {
+   "id": "random_valid_08",
+   "plan": [
+    {
+     "measure": "M1",
+     "district": "almaty"
+    },
+    {
+     "measure": "M2",
+     "district": null
+    },
+    {
+     "measure": "M4",
+     "district": "saryarka"
+    },
+    {
+     "measure": "M11",
+     "district": "saryarka"
+    },
+    {
+     "measure": "M12",
+     "district": null
+    }
+   ],
+   "expect": {
+    "valid": true,
+    "cost": 79,
+    "score": 53.99503,
+    "cityAverage": 58.5129,
+    "weakestDistrictScore": 50.12,
+    "weakestDistrict": "nura",
+    "criticalCount": 2,
+    "critical": [
+     {
+      "district": "nura",
+      "indicator": "S1",
+      "value": 38
+     },
+     {
+      "district": "nura",
+      "indicator": "S2",
+      "value": 35
+     }
+    ],
+    "synergies": [
+     {
+      "pair": [
+       "M1",
+       "M2"
+      ],
+      "district": "almaty",
+      "indicator": "T1",
+      "bonus": 2
+     }
+    ],
+    "districtScores": {
+     "esil": 63.93,
+     "almaty": 59.325,
+     "saryarka": 57.5525,
+     "baikonur": 57.57,
+     "nura": 50.12
+    }
+   }
+  },
+  {
+   "id": "random_valid_09",
+   "plan": [
+    {
+     "measure": "M3",
+     "district": "saryarka"
+    },
+    {
+     "measure": "M4",
+     "district": "saryarka"
+    },
+    {
+     "measure": "M9",
+     "district": "baikonur"
+    },
+    {
+     "measure": "M10",
+     "district": "almaty"
+    },
+    {
+     "measure": "M11",
+     "district": "baikonur"
+    }
+   ],
+   "expect": {
+    "valid": true,
+    "cost": 77,
+    "score": 53.33677,
+    "cityAverage": 57.97539,
+    "weakestDistrictScore": 49.18,
+    "weakestDistrict": "nura",
+    "criticalCount": 2,
+    "critical": [
+     {
+      "district": "nura",
+      "indicator": "S1",
+      "value": 38
+     },
+     {
+      "district": "nura",
+      "indicator": "S2",
+      "value": 35
+     }
+    ],
+    "synergies": [],
+    "districtScores": {
+     "esil": 62.99,
+     "almaty": 58.1625,
+     "saryarka": 57.8625,
+     "baikonur": 58.21375,
+     "nura": 49.18
+    }
+   }
+  },
+  {
+   "id": "random_valid_10",
+   "plan": [
+    {
+     "measure": "M4",
+     "district": "nura"
+    },
+    {
+     "measure": "M5",
+     "district": "nura"
+    },
+    {
+     "measure": "M8",
+     "district": "esil"
+    },
+    {
+     "measure": "M9",
+     "district": "esil"
+    },
+    {
+     "measure": "M13",
+     "district": "baikonur"
+    }
+   ],
+   "expect": {
+    "valid": true,
+    "cost": 98,
+    "score": 53.97616,
+    "cityAverage": 57.85809,
+    "weakestDistrictScore": 51.585,
+    "weakestDistrict": "nura",
+    "criticalCount": 2,
+    "critical": [
+     {
+      "district": "nura",
+      "indicator": "S1",
+      "value": 38
+     },
+     {
+      "district": "nura",
+      "indicator": "S2",
+      "value": 35
+     }
+    ],
+    "synergies": [],
+    "districtScores": {
+     "esil": 64.76625,
+     "almaty": 57.06,
+     "saryarka": 54.65,
+     "baikonur": 57.64,
+     "nura": 51.585
+    }
+   }
+  }
+ ]
+}
