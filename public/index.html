@@ -10,10 +10,9 @@
 <main id="app" aria-busy="true">
   <section class="city-stage" aria-label="Astana miniature city">
     <div id="city-canvas" class="city-canvas" aria-label="Isometric Astana city visualization"></div><div id="city-labels" class="city-labels"></div><div id="city-reactions" class="city-reactions" aria-hidden="true"></div><div id="city-fallback" class="city-fallback" hidden></div>
-    <div id="scene-loading" class="scene-loading"><span class="loading-orbit" aria-hidden="true"></span>Preparing your miniature city…</div>
+    <div id="scene-loading" class="scene-loading" role="status"><strong class="loading-brand">Akim<span>Lab</span></strong><span class="loading-orbit" aria-hidden="true"></span><span>Preparing Astana…</span></div>
   </section>
   <header class="hud surface">
-    <a class="brand" href="/" aria-label="Akim Lab home"><span class="brand-mark" aria-hidden="true">a·</span><span><strong>akim<span>lab</span></strong><small>ASTANA · CITY SIMULATOR</small></span></a>
     <div class="hud-metrics">
       <div class="hud-stat budget-stat"><small>Budget used</small><strong><span id="spent">0</span><span class="stat-unit"> / 100</span></strong><div class="budget-track" role="progressbar" aria-label="Budget used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="budget-fill"></span></div><span id="remaining" class="sr-only"></span></div>
       <button class="hud-stat stat-button" data-open="plan-dialog"><small>Project slots ↗</small><strong id="slot-count">0 / 5</strong></button>
@@ -27,13 +26,12 @@
     <div class="scene-status"><span class="live-dot"></span><span id="scene-state">BASELINE CITY</span><span id="hover-district"></span></div>
     <div class="scene-tools surface"><button id="reset-view" class="map-button" aria-label="Fit the whole city">⌖ <span>Fit city</span></button><span class="tool-divider"></span><button id="pause-city" class="map-button" aria-pressed="false">Pause</button><div class="speed-controls" aria-label="Replay speed"><button data-speed="1" aria-pressed="true">1×</button><button data-speed="2" aria-pressed="false">2×</button><button data-speed="4" aria-pressed="false">4×</button></div></div>
   </div>
-  <div class="world-title" aria-hidden="true"><span>ONE CITY, TWO FUTURES</span><h1>Make room<br>for better.</h1><p>Five decisions. A city that changes.</p></div>
   <div id="app-message" class="app-message" role="status" aria-live="polite">Loading the city model…</div>
   <section id="project-peek" class="project-peek surface" aria-label="Project details" hidden><div class="peek-heading"><span id="peek-category" class="eyebrow"></span><button id="close-peek" class="icon-button" aria-label="Close project details">×</button></div><h2 id="peek-title"></h2><p id="peek-description"></p><div id="peek-effects" class="effect-chips"></div><p id="peek-meta" class="help"></p><p id="peek-action" class="placement-hint"></p><button id="place-current" class="button primary" hidden></button></section>
   <div class="city-bottom-tools"><div id="district-shortcuts" class="district-shortcuts" aria-label="Choose a district"></div><div class="view-switch surface" aria-label="Compare city views"><button data-view="before" aria-pressed="false">Before</button><button data-view="after" aria-pressed="true">Your plan</button><button id="view-a" data-view="a" aria-pressed="false" disabled>Plan A</button></div></div>
-  <section class="project-deck surface" id="project-library" aria-label="Project library">
-    <div class="deck-heading"><div class="deck-title"><strong>Build your future</strong><span id="project-total" class="count-badge">14</span></div><div id="category-filters" class="category-filters" aria-label="Filter projects by category"></div><div class="deck-actions"><button id="load-example" class="button subtle" disabled>Example</button><button id="undo" class="button icon-button" disabled aria-label="Undo last plan edit">↶</button><button id="reset-plan" class="button subtle" disabled>Reset</button><button id="apply-plan" class="button primary" disabled><span>Start</span><span aria-hidden="true"> ▶</span></button></div></div>
-    <div id="projects" class="project-list"></div><div class="deck-foot"><span id="plan-hint">Choose a card, then a district.</span><span>Up to 2 per category · 8 quarters</span></div>
+  <section class="project-deck" id="project-library" aria-label="Project library">
+    <div class="deck-heading"><span class="sr-only"><span id="project-total">14</span> available projects</span><div id="category-filters" class="category-filters" aria-label="Filter projects by category"></div><div class="deck-actions"><button id="load-example" class="button subtle" disabled>Example</button><button id="undo" class="button icon-button" disabled aria-label="Undo last plan edit">↶</button><button id="reset-plan" class="button subtle" disabled>Reset</button><button id="apply-plan" class="button primary" disabled><span>Start</span><span aria-hidden="true"> ▶</span></button></div></div>
+    <div class="deck-cards"><div id="projects" class="project-list" aria-label="Project cards"></div><button id="projects-prev" class="deck-scroll" aria-label="Scroll to previous projects">‹</button><button id="projects-next" class="deck-scroll" aria-label="Scroll to next projects">›</button></div><div class="deck-foot"><span id="plan-hint">Choose a card, then a district.</span></div>
   </section>
   <div class="map-credit"><button data-open="about-dialog">Map &amp; scenario sources</button><span>Real geography · illustrative buildings</span></div>
   <p id="scene-description" class="sr-only"></p>

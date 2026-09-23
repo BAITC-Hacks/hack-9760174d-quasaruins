@@ -116,7 +116,36 @@ const projectPaths = {
 };
 function projectArt(id) {
  const host=node('span','project-art',null,{'aria-hidden':'true'}), svg=document.createElementNS('http://www.w3.org/2000/svg','svg'), path=document.createElementNS(svg.namespaceURI,'path');
- svg.setAttribute('viewBox','0 0 44 40');path.setAttribute('d',projectPaths[id]);svg.append(path);host.append(svg);return host;
+ svg.setAttribute('viewBox','0 0 44 40');path.setAttribute('d',projectPaths[id]);svg.append(path);
+ const artwork=node('img','project-illustration',null,{alt:'',src:`/assets/projects/${id}.png`,decoding:'async',draggable:'false'});
+ artwork.addEventListener('load',()=>host.classList.add('art-loaded'));
+ artwork.addEventListener('error',()=>artwork.remove());
+ host.append(svg,artwork);return host;
+}
+function highlightCard(id) {
+ const measure=measures.get(id);
+ if(!measure||state.run||document.querySelector('dialog[open]')){city?.highlightProject?.(null);return;}
+ const selected=state.selections.find(item=>item.measureId===id);
+ city?.highlightProject?.(id,measure.scope==='city'?null:selected?.districtId??state.districtId);
+}
+function clearCardHighlight() { city?.highlightProject?.(null); }
+let cardArcFrame=0;
+function scheduleCardArc() {
+ if(cardArcFrame)return;
+ cardArcFrame=requestAnimationFrame(()=>{
+   cardArcFrame=0;
+   const list=$('projects');
+   list.classList.remove('fits');
+   list.classList.toggle('fits',list.scrollWidth<=list.clientWidth);
+   const half=list.clientWidth/2;
+   for(const card of list.children){
+     const distance=Math.max(-1,Math.min(1,(card.offsetLeft+card.offsetWidth/2-list.scrollLeft-half)/(half||1)));
+     card.style.setProperty('--card-angle',`${distance*4}deg`);
+     card.style.setProperty('--card-drop',`${distance*distance*12}px`);
+   }
+   $('projects-prev').disabled=list.scrollLeft<2;
+   $('projects-next').disabled=list.scrollLeft+list.clientWidth>=list.scrollWidth-2;
+ });
 }
 function placeProject(id, districtId=state.districtId) {
  const measure=measures.get(id); if(!measure||state.run)return;
@@ -136,9 +165,10 @@ function showProjectDetail(id) {
  action.textContent=selected?'Remove this project':`Place in ${districtName(state.districtId)}`;
 }
 function renderProjects() {
+ clearCardHighlight();
  const savedScroll=$('projects').scrollLeft;
  const shortCategories={transport:'Transport',ecology:'Ecology',social:'Social',safety:'Safety',services:'Services'};
- $('category-filters').replaceChildren(...[{id:'all',name:'All'},...DATASET.categories].map(category=>button(shortCategories[category.id]??category.name,'filter',()=>{state.category=category.id;render();},{'aria-pressed':state.category===category.id,'data-focus':`filter-${category.id}`})));
+ $('category-filters').replaceChildren(...[{id:'all',name:'All'},...DATASET.categories].map(category=>button(shortCategories[category.id]??category.name,'filter',()=>{state.category=category.id;$('projects').scrollLeft=0;state.pending=null;state.peek=null;$('project-peek').hidden=true;message();render();},{'aria-pressed':state.category===category.id,'data-focus':`filter-${category.id}`})));
  const visible=DATASET.measures.filter(measure=>state.category==='all'||measure.category===state.category);$('project-total').textContent=visible.length;
  $('projects').replaceChildren(...visible.map(measure=>{
    const selected=state.selections.find(item=>item.measureId===measure.id), validTargets=(measure.scope==='city'?[null]:DATASET.districts.map(item=>item.id)).some(districtId=>validatePlan([...state.selections,{measureId:measure.id,districtId}],{allowPartial:true}).valid);
@@ -148,12 +178,20 @@ function renderProjects() {
      if(!validTargets){showProjectDetail(measure.id);const checked=validatePlan([...state.selections,{measureId:measure.id,districtId:measure.scope==='city'?null:state.districtId}],{allowPartial:true});message(checked.errors.map(error=>error.message).join(' '),true);return;}
      if(measure.scope==='city'){placeProject(measure.id);return;}
      state.pending=measure.id;state.view='after';render();showProjectDetail(measure.id);message(`Place ${measure.name}: choose a district on the map.`);
-   },{'aria-label':`${selected?'Inspect':'Choose'} ${measure.name}, ${measure.cost} units`,'aria-pressed':Boolean(selected||state.pending===measure.id),'data-focus':`project-${measure.id}`});
+   },{'aria-label':`${selected?'Inspect':'Choose'} ${measure.name}, ${measure.cost} units`,'aria-pressed':Boolean(selected||state.pending===measure.id),'data-focus':`project-${measure.id}`,'data-measure':measure.id});
    card.style.setProperty('--category',categories.get(measure.category).color);card.disabled=Boolean(state.run);
    const cost=node('span','tile-cost',measure.cost);cost.append(node('small','','units'));
    card.append(projectArt(measure.id),cost,node('span','tile-name',projectNames[measure.id]),node('span','tile-scope',selected?`✓ ${districtName(selected.districtId)}`:measure.scope==='city'?'City-wide':`District · ${measure.lag}q build`));
-   card.addEventListener('mouseenter',()=>{if(!state.pending)showProjectDetail(measure.id);});card.addEventListener('focus',()=>showProjectDetail(measure.id));return card;
- }));$('projects').scrollLeft=savedScroll;
+   card.addEventListener('pointerenter',event=>{if(event.pointerType==='touch')return;highlightCard(measure.id);if(!state.pending)showProjectDetail(measure.id);});
+   card.addEventListener('pointerleave',clearCardHighlight);
+   card.addEventListener('focus',()=>{highlightCard(measure.id);showProjectDetail(measure.id);});
+   card.addEventListener('blur',clearCardHighlight);
+   card.addEventListener('keydown',event=>{
+     const cards=[...$('projects').children],index=cards.indexOf(card);
+     const next=event.key==='ArrowRight'?cards[index+1]:event.key==='ArrowLeft'?cards[index-1]:event.key==='Home'?cards[0]:event.key==='End'?cards.at(-1):null;
+     if(next){event.preventDefault();next.focus();next.scrollIntoView({block:'nearest',inline:'nearest',behavior:state.reducedMotion?'instant':'smooth'});}
+   });return card;
+ }));$('projects').scrollLeft=savedScroll;scheduleCardArc();
 }
 function renderResults(validation) {
   const displayed = effectiveResult();
@@ -275,11 +313,10 @@ function renderHud() {
  $('hud-weak-label').textContent=replay?'Weakest · illustrative':official?'Weakest district':'Weakest · baseline';
  $('hud-critical').textContent=result.criticalCount;
  $('hud-critical').title=replay?'Illustrative replay count':official?'Official count':'Baseline count';
- document.querySelector('.world-title').classList.toggle('muted',Boolean(state.selections.length));
  $('plan-comparison').textContent=state.pinned&&state.applied?`Plan A ${fmt(state.pinned.result.score)} → current plan ${fmt(state.applied.result.score)} · ${signed(state.applied.result.score-state.pinned.result.score)} official score. Cost ${state.pinned.result.cost} → ${state.applied.result.cost}.`:state.pinned?`Plan A is saved at ${fmt(state.pinned.result.score)}. Complete your current run to compare.`:'Pin a completed plan, change one choice, then compare the two futures.';
  $('voice-controls').hidden=!document.querySelector('.adviser-text')||!official||state.view!=='after';
 }
-function openDialog(id) { document.querySelectorAll('dialog[open]').forEach(item=>{if(item.id!==id)item.close();}); const dialog=$(id); if(!dialog.open)dialog.showModal(); }
+function openDialog(id) { clearCardHighlight();document.querySelectorAll('dialog[open]').forEach(item=>{if(item.id!==id)item.close();}); const dialog=$(id); if(!dialog.open)dialog.showModal(); }
 function applyPlan() {
  const timeline=timelinePlan(state.selections);
  if(!timeline.valid){message(timeline.errors.map(error=>error.message).join(' '),true);render();return;}
@@ -386,6 +423,16 @@ function showSuggestion(data) {
   $('suggestion-output').replaceChildren(card);
 }
 function bindControls() {
+ $('projects').addEventListener('scroll',()=>{
+   const focused=document.activeElement;
+   if(focused?.dataset.measure&&focused.matches(':focus-visible'))highlightCard(focused.dataset.measure);else clearCardHighlight();
+   scheduleCardArc();
+ },{passive:true});
+ window.addEventListener('resize',scheduleCardArc);
+ window.addEventListener('blur',clearCardHighlight);
+ for(const [id,direction]of [['projects-prev',-1],['projects-next',1]])$(id).addEventListener('click',()=>{
+   clearCardHighlight();$('projects').scrollBy({left:direction*Math.max(150,$('projects').clientWidth*.7),behavior:state.reducedMotion?'instant':'smooth'});
+ });
   document.querySelectorAll('[data-open]').forEach(item=>item.addEventListener('click',()=>openDialog(item.dataset.open)));
   document.querySelectorAll('[data-close]').forEach(item=>item.addEventListener('click',()=>item.closest('dialog').close()));
   $('report-dialog').addEventListener('close',stopVoice);
@@ -435,7 +482,7 @@ async function boot() {
         if (saved.pinned && simulatePlan(saved.pinned).valid) state.pinned = { selections: clone(saved.pinned), result: simulatePlan(saved.pinned) };
       }
     } catch { /* Ignore an unavailable or obsolete saved plan. */ }
-    bindControls(); render(); $('app').setAttribute('aria-busy', 'false'); message(state.selections.length ? 'Your saved draft is restored. Press Start to recalculate its outcomes.' : 'Choose a project card, then its district — or try the example.');
+    bindControls(); render(); $('app').setAttribute('aria-busy', 'false'); message(state.selections.length ? 'Saved draft restored.' : '');
     void sceneReady;
   } catch (error) {
     $('app').setAttribute('aria-busy', 'false'); message('The city calculation model could not load. Your browser has not calculated a score. Reload to retry.', true);

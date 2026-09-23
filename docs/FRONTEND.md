@@ -105,3 +105,21 @@ A temporary Node geometry harness runs the actual scene functions with the real 
 Browser on port3001 verified actual WebGL, six service labels per district (30 total), zero visible landmark nameplates, and a paused quarter-zero scene with existing forms plus scaffolding, no upgraded labels and no official score. Existing 76 engine/server/acceptance tests still pass. Syntax and whitespace checks pass.
 
 This checkpoint is based on geography/module 0566aeb. The next 14-landmark/LRT geometry and enhanced detail module are parallel dependencies; recheck placement after integrating them. No claim of a measured frame rate or surveyed building inventory is made.
+
+## R07: illustrated physical card deck
+
+Project cards now sit directly over the city on a shallow arc, with no enclosing panel. Each card uses `/assets/projects/M1.png` through `M14.png` as a contained illustration: full object silhouettes remain visible, and the title, cost and placement state remain live HTML. A owns and supplies the approved project-specific artwork. Distinct inline icons remain available if an image cannot load. Card surfaces stay opaque when unavailable or disabled during replay.
+
+The deck supports native horizontal scrolling, previous/next buttons, keyboard arrows and Home/End. Short filtered groups center on desktop; filters reset the scroll position without changing the plan. Card rotation and height depend on the visible deck centre. Focus stays visible while scrolling; reduced motion removes animated card lifting and smooth scripted scrolling.
+
+Hover or keyboard focus calls the optional `city.highlightProject` API. City-wide measures highlight all five modeled districts; a district measure uses its already selected target or the current district. Leave, blur, manual scrolling, dialogs and re-rendering clear the highlight. Keyboard scrolling retains the focused project's highlight. Neither the highlight controller nor card navigation changes the plan or camera. Replay suppresses card highlights.
+
+AkimLab appears centered only inside the actual scene-loading overlay and disappears when the existing scene-ready/fallback path hides that overlay. The permanent header brand and large scene slogan have been removed. Main-screen guidance is concise; full effects, delays, scope and provenance remain in the project details and About/report windows.
+
+### R07 validation checkpoint
+
+On port3001, desktop1280×720 and mobile390×844: card-to-district placement produced M1 in Almaty, cost18/one slot; the Transport filter showed exactly three projects. Attempting M3 with M1 preserved the plan and displayed the incompatibility. Keyboard End reached M14 and the deck's scroll limit, and arrow navigation revealed the correct details. Keyboard city-wide focus preserved the budget, slots and every district label's projected coordinates. The actual highlight-controller code also passed a temporary Node harness for existing target/current district/city-wide scope, clearing, dialog/replay guards and unchanged input state.
+
+A paused example replay retained opaque cards, disabled card edits and an em dash for the official headline. Resuming at4× completed at56.54/+3.99/zero critical indicators and opened the report. Mobile page/report had no horizontal overflow. The existing76 model/server/acceptance tests and frontend syntax/whitespace checks pass. Loading branding was absent after scene readiness, and the deck background computed as fully transparent.
+
+After merging artwork baseline `4892695`, all fourteen browser image elements loaded successfully with contain sizing and opaque card surfaces; costs matched the dataset. Desktop screenshots covered M1–M14, including the alpha-bearing M13 over its opaque backing; mobile390×844 artwork also remained readable. A compact375×667 layout had no main-screen clipping, and filtering a pending school placement cancelled that unplaced choice without adding a project. Browser JavaScript warning/error logs were empty. This checkpoint makes no new print-preview, OS media-emulation or frame-rate claim.
