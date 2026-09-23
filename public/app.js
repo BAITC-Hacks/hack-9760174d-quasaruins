@@ -158,10 +158,13 @@ function renderPlacedProjects() {
  $('placed-projects').replaceChildren(...displayedPlan().map(selection=>{
    const measure=measures.get(selection.measureId);
    const badge=button('','placed-project',()=>{if(performance.now()>=suppressCardClickUntil)showProjectDetail(measure.id);},{'aria-label':`${measure.name} · ${districtName(selection.districtId)} · ${measure.cost} units`,'data-focus':`badge-${measure.id}`,'data-measure':measure.id,'data-district':selection.districtId??'city'});
-   if(!badgeArtwork.has(measure.id))badgeArtwork.set(measure.id,projectArt(measure.id).cloneNode(true));
-   const art=badgeArtwork.get(measure.id),image=art.querySelector('img');
-   if(image?.complete&&image.naturalWidth)art.classList.add('art-loaded');
-   image?.addEventListener('load',()=>art.classList.add('art-loaded'),{once:true});
+   if(!badgeArtwork.has(measure.id)){
+     const art=projectArt(measure.id).cloneNode(true),image=art.querySelector('img');
+     if(image?.complete&&image.naturalWidth)art.classList.add('art-loaded');
+     else image?.addEventListener('load',()=>art.classList.add('art-loaded'),{once:true});
+     badgeArtwork.set(measure.id,art);
+   }
+   const art=badgeArtwork.get(measure.id);
    badge.append(art);badge.title=`${measure.name} · ${districtName(selection.districtId)}`;
    badge.disabled=Boolean(state.run);bindProjectPointer(badge,measure.id);
    if(state.view!=='a')bindCardDrag(badge,measure.id,true);
